@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/cheryeong/watchdog/internal/db"
+	"github.com/naru-bot/watchdog/internal/db"
 )
 
 type Result struct {

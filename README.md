@@ -23,18 +23,18 @@ A Swiss Army knife CLI for website **uptime monitoring** and **change detection*
 
 **From source (requires Go 1.24+):**
 ```bash
-go install github.com/cheryeong/watchdog@latest
+go install github.com/naru-bot/watchdog@latest
 ```
 
 **From binary releases:**
 ```bash
 # macOS (Apple Silicon)
-curl -LO https://github.com/cheryeong/watchdog/releases/latest/download/watchdog_darwin_arm64.tar.gz
+curl -LO https://github.com/naru-bot/watchdog/releases/latest/download/watchdog_darwin_arm64.tar.gz
 tar xzf watchdog_darwin_arm64.tar.gz
 sudo mv watchdog /usr/local/bin/
 
 # Linux (x86_64)
-curl -LO https://github.com/cheryeong/watchdog/releases/latest/download/watchdog_linux_amd64.tar.gz
+curl -LO https://github.com/naru-bot/watchdog/releases/latest/download/watchdog_linux_amd64.tar.gz
 tar xzf watchdog_linux_amd64.tar.gz
 sudo mv watchdog /usr/local/bin/
 ```
@@ -261,7 +261,7 @@ All data is stored in `~/.watchdog/watchdog.db` (SQLite). You can:
 ## Building from Source
 
 ```bash
-git clone https://github.com/cheryeong/watchdog.git
+git clone https://github.com/naru-bot/watchdog.git
 cd watchdog
 make build
 

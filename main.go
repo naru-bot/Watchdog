@@ -1,6 +1,6 @@
 package main
 
-import "github.com/cheryeong/watchdog/cmd"
+import "github.com/naru-bot/watchdog/cmd"
 
 func main() {
 	cmd.Execute()

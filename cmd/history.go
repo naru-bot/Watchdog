@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/cheryeong/watchdog/internal/db"
+	"github.com/naru-bot/watchdog/internal/db"
 	"github.com/spf13/cobra"
 )
 

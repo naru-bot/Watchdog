@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cheryeong/watchdog/internal/checker"
-	"github.com/cheryeong/watchdog/internal/db"
+	"github.com/naru-bot/watchdog/internal/checker"
+	"github.com/naru-bot/watchdog/internal/db"
 	"github.com/spf13/cobra"
 )
 

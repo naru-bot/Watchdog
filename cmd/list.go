@@ -6,7 +6,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/cheryeong/watchdog/internal/db"
+	"github.com/naru-bot/watchdog/internal/db"
 	"github.com/spf13/cobra"
 )
 

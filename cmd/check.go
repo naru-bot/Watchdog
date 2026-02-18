@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cheryeong/watchdog/internal/checker"
-	"github.com/cheryeong/watchdog/internal/db"
-	"github.com/cheryeong/watchdog/internal/notify"
+	"github.com/naru-bot/watchdog/internal/checker"
+	"github.com/naru-bot/watchdog/internal/db"
+	"github.com/naru-bot/watchdog/internal/notify"
 	"github.com/spf13/cobra"
 )
 

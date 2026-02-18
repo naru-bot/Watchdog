@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/cheryeong/watchdog/internal/db"
-	"github.com/cheryeong/watchdog/internal/diff"
+	"github.com/naru-bot/watchdog/internal/db"
+	"github.com/naru-bot/watchdog/internal/diff"
 	"github.com/spf13/cobra"
 )
 

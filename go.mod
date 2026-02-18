@@ -1,4 +1,4 @@
-module github.com/cheryeong/watchdog
+module github.com/naru-bot/watchdog
 
 go 1.24.0
 
