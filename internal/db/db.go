@@ -18,6 +18,9 @@ type Target struct {
 	Interval  int       `json:"interval_seconds"`
 	Selector  string    `json:"selector,omitempty"` // CSS selector for change detection
 	Headers   string    `json:"headers,omitempty"`  // JSON string of custom headers
+	Expect    string    `json:"expect,omitempty"`   // Expected keyword in response
+	Timeout   int       `json:"timeout,omitempty"`  // Per-target timeout in seconds
+	Retries   int       `json:"retries,omitempty"`  // Retry count before marking down
 	CreatedAt time.Time `json:"created_at"`
 	Paused    bool      `json:"paused"`
 }
@@ -78,6 +81,9 @@ func InitWithPath(path string) error {
 		interval_seconds INTEGER NOT NULL DEFAULT 300,
 		selector TEXT DEFAULT '',
 		headers TEXT DEFAULT '',
+		expect TEXT DEFAULT '',
+		timeout INTEGER DEFAULT 30,
+		retries INTEGER DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		paused INTEGER DEFAULT 0,
 		UNIQUE(url, selector)
@@ -123,19 +129,25 @@ func DB() *sql.DB {
 	return db
 }
 
-func AddTarget(name, url, typ string, interval int, selector, headers string) (*Target, error) {
+func AddTarget(name, url, typ string, interval int, selector, headers, expect string, timeout, retries int) (*Target, error) {
 	if name == "" {
 		name = url
 	}
+	if timeout <= 0 {
+		timeout = 30
+	}
+	if retries <= 0 {
+		retries = 1
+	}
 	res, err := db.Exec(
-		"INSERT INTO targets (name, url, type, interval_seconds, selector, headers) VALUES (?, ?, ?, ?, ?, ?)",
-		name, url, typ, interval, selector, headers,
+		"INSERT INTO targets (name, url, type, interval_seconds, selector, headers, expect, timeout, retries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		name, url, typ, interval, selector, headers, expect, timeout, retries,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add target (may already exist): %w", err)
 	}
 	id, _ := res.LastInsertId()
-	return &Target{ID: id, Name: name, URL: url, Type: typ, Interval: interval, Selector: selector, Headers: headers, CreatedAt: time.Now()}, nil
+	return &Target{ID: id, Name: name, URL: url, Type: typ, Interval: interval, Selector: selector, Headers: headers, Expect: expect, Timeout: timeout, Retries: retries, CreatedAt: time.Now()}, nil
 }
 
 func RemoveTarget(identifier string) error {
@@ -152,7 +164,7 @@ func RemoveTarget(identifier string) error {
 }
 
 func ListTargets() ([]Target, error) {
-	rows, err := db.Query("SELECT id, name, url, type, interval_seconds, selector, headers, created_at, paused FROM targets ORDER BY id")
+	rows, err := db.Query("SELECT id, name, url, type, interval_seconds, selector, headers, expect, timeout, retries, created_at, paused FROM targets ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +174,7 @@ func ListTargets() ([]Target, error) {
 	for rows.Next() {
 		var t Target
 		var paused int
-		err := rows.Scan(&t.ID, &t.Name, &t.URL, &t.Type, &t.Interval, &t.Selector, &t.Headers, &t.CreatedAt, &paused)
+		err := rows.Scan(&t.ID, &t.Name, &t.URL, &t.Type, &t.Interval, &t.Selector, &t.Headers, &t.Expect, &t.Timeout, &t.Retries, &t.CreatedAt, &paused)
 		if err != nil {
 			return nil, err
 		}
@@ -176,9 +188,9 @@ func GetTarget(identifier string) (*Target, error) {
 	var t Target
 	var paused int
 	err := db.QueryRow(
-		"SELECT id, name, url, type, interval_seconds, selector, headers, created_at, paused FROM targets WHERE name = ? OR url = ? OR id = ?",
+		"SELECT id, name, url, type, interval_seconds, selector, headers, expect, timeout, retries, created_at, paused FROM targets WHERE name = ? OR url = ? OR id = ?",
 		identifier, identifier, identifier,
-	).Scan(&t.ID, &t.Name, &t.URL, &t.Type, &t.Interval, &t.Selector, &t.Headers, &t.CreatedAt, &paused)
+	).Scan(&t.ID, &t.Name, &t.URL, &t.Type, &t.Interval, &t.Selector, &t.Headers, &t.Expect, &t.Timeout, &t.Retries, &t.CreatedAt, &paused)
 	if err != nil {
 		return nil, fmt.Errorf("target not found: %s", identifier)
 	}

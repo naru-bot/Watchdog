@@ -23,9 +23,29 @@ type Result struct {
 	Content      string
 	Error        string
 	SSLExpiry    *time.Time
+	BodyMatch    *bool // nil if no expect keyword, true/false otherwise
 }
 
 func Check(target *db.Target) *Result {
+	retries := target.Retries
+	if retries <= 0 {
+		retries = 1
+	}
+
+	var result *Result
+	for i := 0; i < retries; i++ {
+		result = checkOnce(target)
+		if result.Status == "up" || result.Status == "unchanged" || result.Status == "changed" {
+			return result
+		}
+		if i < retries-1 {
+			time.Sleep(2 * time.Second) // wait between retries
+		}
+	}
+	return result
+}
+
+func checkOnce(target *db.Target) *Result {
 	switch target.Type {
 	case "http", "https":
 		return checkHTTP(target)
@@ -44,8 +64,13 @@ func checkHTTP(target *db.Target) *Result {
 	start := time.Now()
 	result := &Result{}
 
+	timeout := time.Duration(target.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 		},
@@ -104,8 +129,21 @@ func checkHTTP(target *db.Target) *Result {
 	hash := sha256.Sum256([]byte(content))
 	result.ContentHash = fmt.Sprintf("%x", hash)
 
-	// Determine status by comparing with previous snapshot
+	// Check expected keyword
+	if target.Expect != "" {
+		matched := strings.Contains(content, target.Expect)
+		result.BodyMatch = &matched
+	}
+
+	// Determine status
 	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		// Check keyword match
+		if result.BodyMatch != nil && !*result.BodyMatch {
+			result.Status = "down"
+			result.Error = fmt.Sprintf("expected keyword %q not found", target.Expect)
+			return result
+		}
+
 		snaps, err := db.GetLatestSnapshots(target.ID, 1)
 		if err == nil && len(snaps) > 0 {
 			if snaps[0].Hash != result.ContentHash {
@@ -128,7 +166,12 @@ func checkTCP(target *db.Target) *Result {
 	start := time.Now()
 	result := &Result{}
 
-	conn, err := net.DialTimeout("tcp", target.URL, 10*time.Second)
+	timeout := time.Duration(target.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+
+	conn, err := net.DialTimeout("tcp", target.URL, timeout)
 	result.ResponseTime = time.Since(start)
 
 	if err != nil {
