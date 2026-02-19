@@ -29,7 +29,7 @@
   - [Daemon Mode](#-daemon-mode)
 - [Tutorial: Monitor Your First Website in 60 Seconds](#tutorial-monitor-your-first-website-in-60-seconds)
 - [AI Agent Integration](#ai-agent-integration)
-- [Comparison](#comparison)
+- [How Watchdog Is Different](#how-watchdog-is-different)
 - [Installation](#installation)
 - [All Commands](#all-commands)
 - [Configuration](#configuration)
@@ -44,14 +44,14 @@
 
 You just want to know if your website is up. Maybe get alerted when a pricing page changes. Simple, right?
 
-Most existing tools are great at what they do — [Uptime Kuma](https://github.com/louislam/uptime-kuma) gives you a beautiful dashboard, [changedetection.io](https://github.com/dgtlmoon/changedetection.io) handles page diffing, [Statping-ng](https://github.com/statping-ng/statping-ng) gives you status pages, [EaseProbe](https://github.com/megaease/easeprobe) does multi-protocol probing. But they all share a common pattern:
+There are plenty of great monitoring tools out there — dashboards, status pages, change trackers. They work well for what they're built for. But most share a common pattern:
 
-1. **Docker required** — spin up a container, expose a port, manage volumes
+1. **Docker or server required** — spin up a container, expose a port, manage volumes
 2. **Web UI only** — need a browser to check on things
-3. **One concern each** — want uptime *and* change detection? Run two services
+3. **Single purpose** — want uptime monitoring *and* change detection? Run separate services
 4. **Hard to script** — integrating with cron jobs or AI agents means wrestling with REST APIs
 
-For teams running production infrastructure with public status pages, these tools make perfect sense. But if you just want to monitor a handful of sites from your terminal — or let an AI agent keep an eye on things — there should be a simpler way.
+For teams running production infrastructure with public status pages, these tools are the right choice. But if you just want to monitor a handful of sites from your terminal — or let an AI agent keep an eye on things — there should be a simpler way.
 
 **That's why Watchdog exists.**
 
@@ -287,20 +287,17 @@ watchdog diff "Pricing Page" --json
 
 ---
 
-## Comparison
+## How Watchdog Is Different
 
-| | Uptime Kuma | changedetection.io | Statping-ng | EaseProbe | **Watchdog** |
-|---|---|---|---|---|---|
-| Install | Docker + Web UI | Docker + Web UI | Docker + Web UI | Binary + YAML config | **Single binary** |
-| Dependencies | Node.js, SQLite | Python, Playwright | Go, DB server | Go | **None** |
-| Interface | Web browser | Web browser | Web browser | Config file + logs | **Terminal / TUI / JSON** |
-| AI-friendly | ❌ API only | ❌ API only | ❌ API only | ❌ Log parsing | **✅ Native CLI + JSON** |
-| Uptime monitoring | ✅ | ❌ | ✅ | ✅ | **✅** |
-| Change detection | ❌ | ✅ | ❌ | ❌ | **✅** |
-| Interactive TUI | ❌ | ❌ | ❌ | ❌ | **✅** |
-| Status page | ✅ | ❌ | ✅ | ❌ | Terminal dashboard |
-| RAM usage | ~150MB+ | ~300MB+ | ~100MB+ | ~30MB | **~10MB** |
-| Works over SSH | ❌ | ❌ | ❌ | ✅ | **✅** |
+| | Typical web-based monitors | **Watchdog** |
+|---|---|---|
+| Install | Docker / server setup | **Single binary, zero dependencies** |
+| Interface | Web browser required | **Terminal / TUI / JSON** |
+| Uptime + change detection | Usually separate tools | **All-in-one** |
+| AI & automation friendly | REST API wrappers | **Native CLI + JSON on every command** |
+| Interactive dashboard | Browser tab | **TUI that works over SSH** |
+| Resource usage | 100-300MB+ RAM | **~10MB** |
+| Scriptable | Needs API tokens & HTTP calls | **Pipe-friendly, works in cron/shell** |
 
 ---
 
