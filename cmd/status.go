@@ -37,6 +37,7 @@ type statusOutput struct {
 	MaxResponseMs int64   `json:"max_response_ms"`
 	TotalChecks   int     `json:"total_checks"`
 	LastStatus    string  `json:"last_status"`
+	LastError     string  `json:"last_error,omitempty"`
 	LastChecked   string  `json:"last_checked,omitempty"`
 	Changes       int     `json:"content_changes"`
 	Sparkline     string  `json:"sparkline,omitempty"`
@@ -87,12 +88,14 @@ func runStatus(cmd *cobra.Command, args []string) {
 		results, _ := db.GetCheckHistory(t.ID, 1000)
 		changes := 0
 		lastStatus := "unknown"
+		lastError := ""
 		lastChecked := ""
 		var minMs, maxMs int64
 		var responseTimes []int64
 		for i, r := range results {
 			if i == 0 {
 				lastStatus = r.Status
+				lastError = r.Error
 				lastChecked = r.CheckedAt.Format(time.RFC3339)
 				minMs = r.ResponseTime
 				maxMs = r.ResponseTime
@@ -121,6 +124,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 			MaxResponseMs: maxMs,
 			TotalChecks:   total,
 			LastStatus:    lastStatus,
+			LastError:     lastError,
 			LastChecked:   lastChecked,
 			Changes:       changes,
 			Sparkline:     spark,
@@ -165,6 +169,13 @@ func runStatus(cmd *cobra.Command, args []string) {
 
 		fmt.Fprintf(w, "%s\t%s\t%.0fms\t%d\t%d\t%s\t%s\n",
 			truncate(o.Target, 25), uptimeStr, o.AvgResponseMs, o.TotalChecks, o.Changes, o.Sparkline, statusStr)
+		if o.LastError != "" && (o.LastStatus == "down" || o.LastStatus == "error") {
+			errStr := o.LastError
+			if !noColor && !jsonOutput {
+				errStr = colorRed(errStr)
+			}
+			fmt.Fprintf(w, "  ↳ %s\t\t\t\t\t\t\n", errStr)
+		}
 	}
 	w.Flush()
 }
