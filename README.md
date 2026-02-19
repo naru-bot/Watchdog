@@ -486,6 +486,38 @@ sudo systemctl stop watchdog-monitor
 sudo systemctl restart watchdog-monitor
 ```
 
+### Removing the Service
+
+```bash
+sudo systemctl stop watchdog-monitor
+sudo systemctl disable watchdog-monitor
+sudo rm /etc/systemd/system/watchdog-monitor.service
+sudo systemctl daemon-reload
+```
+
+---
+
+## Uninstalling Watchdog
+
+To completely remove Watchdog from your system:
+
+```bash
+# 1. Stop and remove the service (if running)
+sudo systemctl stop watchdog-monitor
+sudo systemctl disable watchdog-monitor
+sudo rm /etc/systemd/system/watchdog-monitor.service
+sudo systemctl daemon-reload
+
+# 2. Remove the binary
+sudo rm /usr/local/bin/watchdog
+# Or if installed via go install:
+rm $(go env GOPATH)/bin/watchdog
+
+# 3. Remove data and config
+rm -rf ~/.watchdog
+rm -rf ~/.config/watchdog
+```
+
 ---
 
 ## Tech Stack
