@@ -33,7 +33,7 @@
 - [Installation](#installation)
 - [All Commands](#all-commands)
 - [Configuration](#configuration)
-- [Systemd Service](#systemd-service)
+- [Running as a Background Service](#running-as-a-background-service)
 - [Tech Stack](#tech-stack)
 - [Contributing](#contributing)
 - [License](#license)
@@ -442,11 +442,14 @@ All data lives in `~/.watchdog/watchdog.db` (SQLite). Back up by copying the fil
 
 ---
 
-## Systemd Service
+## Running as a Background Service
 
-Create `/etc/systemd/system/watchdog-monitor.service`:
+To run Watchdog in the background and survive reboots, set it up as a systemd service.
 
-```ini
+**One-liner setup:**
+
+```bash
+sudo tee /etc/systemd/system/watchdog-monitor.service << 'EOF'
 [Unit]
 Description=Watchdog Website Monitor
 After=network.target
@@ -459,11 +462,28 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now watchdog-monitor
 ```
 
+**Check status:**
+
 ```bash
-sudo systemctl enable watchdog-monitor
-sudo systemctl start watchdog-monitor
+sudo systemctl status watchdog-monitor
+```
+
+**View logs:**
+
+```bash
+journalctl -u watchdog-monitor -f
+```
+
+**Stop / restart:**
+
+```bash
+sudo systemctl stop watchdog-monitor
+sudo systemctl restart watchdog-monitor
 ```
 
 ---
