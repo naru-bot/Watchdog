@@ -2,7 +2,7 @@
 Output assets/uptime.gif
 
 Set FontSize 18
-Set Width 900
+Set Width 1200
 Set Height 500
 Set LineHeight 1.4
 Set Padding 20

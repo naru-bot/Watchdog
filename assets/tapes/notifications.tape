@@ -2,7 +2,7 @@
 Output assets/notifications.gif
 
 Set FontSize 18
-Set Width 950
+Set Width 1200
 Set Height 500
 Set LineHeight 1.3
 Set Padding 20
