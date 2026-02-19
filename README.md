@@ -44,15 +44,16 @@
 
 You just want to know if your website is up. Maybe get alerted when a pricing page changes. Simple, right?
 
-**Nope.** In 2024, here's what that actually looks like:
+**Nope.** In 2026, here's what that actually looks like:
 
-1. Spin up an Uptime Kuma Docker container for monitoring
+1. Spin up an Uptime Kuma Docker container for uptime monitoring
 2. Spin up a changedetection.io Docker container for change detection
-3. Configure both through their web UIs
-4. Keep both running 24/7, eating RAM on your server
-5. Open a browser every time you want to check status
-6. Try to integrate with your scripts or AI agent — good luck parsing those web APIs
-7. Realize you're running **two separate services with two databases** just to watch three websites
+3. Maybe throw in Statping-ng for a status page, or EaseProbe for multi-protocol probes
+4. Configure each one through separate web UIs
+5. Keep them all running 24/7, eating RAM on your server
+6. Open a browser every time you want to check status
+7. Try to integrate with your scripts or AI agent — good luck parsing those web APIs
+8. Realize you're running **multiple services with separate databases** just to watch three websites
 
 **Watchdog is the tool I built because I got tired of this nonsense.**
 
@@ -292,17 +293,18 @@ watchdog diff "Pricing Page" --json
 
 ## Comparison
 
-| | Uptime Kuma | changedetection.io | **Watchdog** |
-|---|---|---|---|
-| Install | Docker + Web UI | Docker + Web UI | **Single binary** |
-| Dependencies | Node.js, SQLite | Python, Playwright | **None** |
-| Interface | Web browser | Web browser | **Terminal / JSON** |
-| AI-friendly | ❌ API only | ❌ API only | **✅ Native CLI + JSON** |
-| Uptime monitoring | ✅ | ❌ | **✅** |
-| Change detection | ❌ | ✅ | **✅** |
-| Combined | Need both 🤷 | Need both 🤷 | **All-in-one** |
-| RAM usage | ~150MB+ | ~300MB+ | **~10MB** |
-| Works over SSH | ❌ | ❌ | **✅** |
+| | Uptime Kuma | changedetection.io | Statping-ng | EaseProbe | **Watchdog** |
+|---|---|---|---|---|---|
+| Install | Docker + Web UI | Docker + Web UI | Docker + Web UI | Binary + YAML config | **Single binary** |
+| Dependencies | Node.js, SQLite | Python, Playwright | Go, DB server | Go | **None** |
+| Interface | Web browser | Web browser | Web browser | Config file + logs | **Terminal / TUI / JSON** |
+| AI-friendly | ❌ API only | ❌ API only | ❌ API only | ❌ Log parsing | **✅ Native CLI + JSON** |
+| Uptime monitoring | ✅ | ❌ | ✅ | ✅ | **✅** |
+| Change detection | ❌ | ✅ | ❌ | ❌ | **✅** |
+| Interactive TUI | ❌ | ❌ | ❌ | ❌ | **✅** |
+| Status page | ✅ | ❌ | ✅ | ❌ | Terminal dashboard |
+| RAM usage | ~150MB+ | ~300MB+ | ~100MB+ | ~30MB | **~10MB** |
+| Works over SSH | ❌ | ❌ | ❌ | ✅ | **✅** |
 
 ---
 
