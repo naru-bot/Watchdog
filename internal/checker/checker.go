@@ -267,14 +267,54 @@ func checkDNS(target *db.Target) *Result {
 	start := time.Now()
 	result := &Result{}
 
-	_, err := net.LookupHost(target.URL)
+	host := target.URL
+	// Strip protocol/path if a full URL was provided
+	if strings.Contains(host, "://") {
+		if u, err := url.Parse(host); err == nil {
+			host = u.Hostname()
+		}
+	}
+
+	addrs, err := net.LookupHost(host)
 	result.ResponseTime = time.Since(start)
 
 	if err != nil {
 		result.Status = "down"
 		result.Error = err.Error()
+		content := fmt.Sprintf("Domain: %s\nStatus: not resolving\nError: %s", host, err.Error())
+		result.Content = content
+		hash := sha256.Sum256([]byte("unresolved"))
+		result.ContentHash = fmt.Sprintf("%x", hash)
 		return result
 	}
+
+	// Build content with resolved addresses
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Domain: %s\n", host))
+	sb.WriteString(fmt.Sprintf("Resolved: %s\n", strings.Join(addrs, ", ")))
+
+	// Also try MX, NS, TXT records
+	if mx, err := net.LookupMX(host); err == nil && len(mx) > 0 {
+		var mxHosts []string
+		for _, m := range mx {
+			mxHosts = append(mxHosts, fmt.Sprintf("%s (pri %d)", m.Host, m.Pref))
+		}
+		sb.WriteString(fmt.Sprintf("MX: %s\n", strings.Join(mxHosts, ", ")))
+	}
+	if ns, err := net.LookupNS(host); err == nil && len(ns) > 0 {
+		var nsHosts []string
+		for _, n := range ns {
+			nsHosts = append(nsHosts, n.Host)
+		}
+		sb.WriteString(fmt.Sprintf("NS: %s\n", strings.Join(nsHosts, ", ")))
+	}
+	if txt, err := net.LookupTXT(host); err == nil && len(txt) > 0 {
+		sb.WriteString(fmt.Sprintf("TXT: %s\n", strings.Join(txt, "; ")))
+	}
+
+	result.Content = sb.String()
+	hash := sha256.Sum256([]byte(result.Content))
+	result.ContentHash = fmt.Sprintf("%x", hash)
 	result.Status = "up"
 	return result
 }
