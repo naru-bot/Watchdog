@@ -4,10 +4,14 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
+	"image/color"
+	"image/png"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -70,6 +74,7 @@ type Result struct {
 	Error        string
 	SSLExpiry    *time.Time
 	BodyMatch    *bool // nil if no expect keyword, true/false otherwise
+	DiffPercent  float64 // Visual diff percentage (for visual checks)
 }
 
 func Check(target *db.Target) *Result {
@@ -101,6 +106,8 @@ func checkOnce(target *db.Target) *Result {
 		return checkPing(target)
 	case "dns":
 		return checkDNS(target)
+	case "visual":
+		return checkVisual(target)
 	default:
 		return checkHTTP(target)
 	}
@@ -263,5 +270,206 @@ func checkDNS(target *db.Target) *Result {
 		return result
 	}
 	result.Status = "up"
+	return result
+}
+
+// getScreenshotDir returns the directory where screenshots are stored
+func getScreenshotDir() (string, error) {
+	dataDir := filepath.Dir(db.GetDBPath())
+	screenshotDir := filepath.Join(dataDir, "screenshots")
+	return screenshotDir, os.MkdirAll(screenshotDir, 0755)
+}
+
+// findHeadlessBrowser tries to find a suitable headless browser
+func findHeadlessBrowser() (string, []string) {
+	browsers := []struct {
+		binary string
+		args   []string
+	}{
+		{"chrome-headless-shell", []string{"--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"}},
+		{"chromium-browser", []string{"--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"}},
+		{"chromium", []string{"--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"}},
+		{"google-chrome", []string{"--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"}},
+		{"google-chrome-stable", []string{"--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"}},
+	}
+
+	for _, browser := range browsers {
+		if _, err := exec.LookPath(browser.binary); err == nil {
+			return browser.binary, browser.args
+		}
+	}
+	return "", nil
+}
+
+// takeScreenshot captures a screenshot of the URL using headless browser
+func takeScreenshot(url, outputPath string, timeout time.Duration) error {
+	binary, args := findHeadlessBrowser()
+	if binary == "" {
+		return fmt.Errorf("no suitable headless browser found (tried chrome-headless-shell, chromium-browser, chromium, google-chrome)")
+	}
+
+	// Build command arguments
+	cmdArgs := append(args,
+		fmt.Sprintf("--screenshot=%s", outputPath),
+		"--window-size=1920,1080",
+		"--hide-scrollbars",
+		"--disable-background-timer-throttling",
+		"--disable-backgrounding-occluded-windows",
+		url,
+	)
+
+	cmd := exec.Command(binary, cmdArgs...)
+	
+	// Set timeout
+	if timeout > 0 {
+		go func() {
+			time.Sleep(timeout)
+			if cmd.Process != nil {
+				cmd.Process.Kill()
+			}
+		}()
+	}
+
+	return cmd.Run()
+}
+
+// compareImages compares two PNG images and returns the diff percentage
+func compareImages(img1Path, img2Path string) (float64, error) {
+	// Read first image
+	file1, err := os.Open(img1Path)
+	if err != nil {
+		return 0, err
+	}
+	defer file1.Close()
+
+	img1, err := png.Decode(file1)
+	if err != nil {
+		return 0, err
+	}
+
+	// Read second image
+	file2, err := os.Open(img2Path)
+	if err != nil {
+		return 0, err
+	}
+	defer file2.Close()
+
+	img2, err := png.Decode(file2)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get image bounds
+	bounds1 := img1.Bounds()
+	bounds2 := img2.Bounds()
+
+	// Images must be same size
+	if bounds1.Dx() != bounds2.Dx() || bounds1.Dy() != bounds2.Dy() {
+		return 100.0, nil // Complete difference if sizes don't match
+	}
+
+	width := bounds1.Dx()
+	height := bounds1.Dy()
+	totalPixels := width * height
+	diffPixels := 0
+
+	// Compare pixels
+	for y := bounds1.Min.Y; y < bounds1.Max.Y; y++ {
+		for x := bounds1.Min.X; x < bounds1.Max.X; x++ {
+			c1 := color.RGBAModel.Convert(img1.At(x, y)).(color.RGBA)
+			c2 := color.RGBAModel.Convert(img2.At(x, y)).(color.RGBA)
+
+			// Simple pixel comparison - count as different if any channel differs
+			if c1.R != c2.R || c1.G != c2.G || c1.B != c2.B || c1.A != c2.A {
+				diffPixels++
+			}
+		}
+	}
+
+	return float64(diffPixels) / float64(totalPixels) * 100.0, nil
+}
+
+func checkVisual(target *db.Target) *Result {
+	start := time.Now()
+	result := &Result{}
+
+	timeout := time.Duration(target.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 60 * time.Second // Default 60s for visual checks
+	}
+	
+	threshold := target.Threshold
+	if threshold <= 0 {
+		threshold = 5.0
+	}
+
+	// Get screenshot directory
+	screenshotDir, err := getScreenshotDir()
+	if err != nil {
+		result.Status = "error"
+		result.Error = fmt.Sprintf("failed to create screenshot directory: %v", err)
+		result.ResponseTime = time.Since(start)
+		return result
+	}
+
+	currentPath := filepath.Join(screenshotDir, fmt.Sprintf("%d_current.png", target.ID))
+	previousPath := filepath.Join(screenshotDir, fmt.Sprintf("%d_previous.png", target.ID))
+
+	// Move current to previous if it exists
+	if _, err := os.Stat(currentPath); err == nil {
+		os.Rename(currentPath, previousPath)
+	}
+
+	// Take new screenshot
+	if err := takeScreenshot(target.URL, currentPath, timeout); err != nil {
+		result.Status = "error"
+		result.Error = fmt.Sprintf("failed to take screenshot: %v", err)
+		result.ResponseTime = time.Since(start)
+		return result
+	}
+
+	result.ResponseTime = time.Since(start)
+
+	// Check if screenshot was actually created
+	if _, err := os.Stat(currentPath); err != nil {
+		result.Status = "error"
+		result.Error = "screenshot file was not created"
+		return result
+	}
+
+	// Read screenshot for hash
+	screenshotBytes, err := os.ReadFile(currentPath)
+	if err != nil {
+		result.Status = "error"
+		result.Error = fmt.Sprintf("failed to read screenshot: %v", err)
+		return result
+	}
+
+	// Compute hash of screenshot
+	hash := sha256.Sum256(screenshotBytes)
+	result.ContentHash = fmt.Sprintf("%x", hash)
+
+	// Compare with previous if it exists
+	if _, err := os.Stat(previousPath); err == nil {
+		diffPercent, err := compareImages(currentPath, previousPath)
+		if err != nil {
+			result.Status = "error"
+			result.Error = fmt.Sprintf("failed to compare images: %v", err)
+			return result
+		}
+
+		result.DiffPercent = diffPercent
+
+		if diffPercent > threshold {
+			result.Status = "changed"
+			result.Error = fmt.Sprintf("visual diff: %.1f%% (threshold: %.1f%%)", diffPercent, threshold)
+		} else {
+			result.Status = "unchanged"
+		}
+	} else {
+		result.Status = "up" // First run
+		result.DiffPercent = 0.0
+	}
+
 	return result
 }

@@ -102,15 +102,16 @@ const (
 	editTimeout
 	editRetries
 	editSelector
-	editExpect
+	editExpected
+	editThreshold
 	editFieldCount
 )
 
 var editFieldLabels = [editFieldCount]string{
-	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect",
+	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect", "Threshold (%)",
 }
 
-var typeOptions = []string{"http", "tcp", "ping", "dns"}
+var typeOptions = []string{"http", "tcp", "ping", "dns", "visual"}
 
 func nextType(current string) string {
 	for i, t := range typeOptions {
@@ -583,7 +584,8 @@ func (m *tuiModel) initAddInputs() {
 	m.editInputs[editTimeout].SetValue("30")
 	m.editInputs[editRetries].SetValue("1")
 	m.editInputs[editSelector].Placeholder = "CSS selector (optional)"
-	m.editInputs[editExpect].Placeholder = "Expected keyword (optional)"
+	m.editInputs[editExpected].Placeholder = "Expected keyword (optional)"
+	m.editInputs[editThreshold].SetValue("5.0")
 
 	m.editFocus = 0
 }
@@ -597,7 +599,7 @@ func (m *tuiModel) saveAdd() error {
 	name := m.editInputs[editName].Value()
 	typ := m.editInputs[editType].Value()
 	selector := m.editInputs[editSelector].Value()
-	expect := m.editInputs[editExpect].Value()
+	expect := m.editInputs[editExpected].Value()
 
 	interval := 300
 	if v, err := strconv.Atoi(m.editInputs[editInterval].Value()); err == nil && v > 0 {
@@ -611,8 +613,12 @@ func (m *tuiModel) saveAdd() error {
 	if v, err := strconv.Atoi(m.editInputs[editRetries].Value()); err == nil && v > 0 {
 		retries = v
 	}
+	threshold := 5.0
+	if v, err := strconv.ParseFloat(m.editInputs[editThreshold].Value(), 64); err == nil && v > 0 {
+		threshold = v
+	}
 
-	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries)
+	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold)
 	return err
 }
 
@@ -631,14 +637,15 @@ func (m *tuiModel) initEditInputs() {
 	m.editInputs[editName].SetValue(t.Name)
 	m.editInputs[editURL].SetValue(t.URL)
 	m.editInputs[editType].SetValue(t.Type)
-	m.editInputs[editType].Placeholder = "http, tcp, ping, dns"
+	m.editInputs[editType].Placeholder = "http, tcp, ping, dns, visual"
 	m.editInputs[editInterval].SetValue(fmt.Sprintf("%d", t.Interval))
 	m.editInputs[editTimeout].SetValue(fmt.Sprintf("%d", t.Timeout))
 	m.editInputs[editRetries].SetValue(fmt.Sprintf("%d", t.Retries))
 	m.editInputs[editSelector].SetValue(t.Selector)
 	m.editInputs[editSelector].Placeholder = "CSS selector (optional)"
-	m.editInputs[editExpect].SetValue(t.Expect)
-	m.editInputs[editExpect].Placeholder = "Expected keyword (optional)"
+	m.editInputs[editExpected].SetValue(t.Expect)
+	m.editInputs[editExpected].Placeholder = "Expected keyword (optional)"
+	m.editInputs[editThreshold].SetValue(fmt.Sprintf("%.1f", t.Threshold))
 
 	m.editFocus = 0
 }
@@ -663,7 +670,7 @@ func (m *tuiModel) saveEdit() error {
 	t.URL = m.editInputs[editURL].Value()
 	t.Type = m.editInputs[editType].Value()
 	t.Selector = m.editInputs[editSelector].Value()
-	t.Expect = m.editInputs[editExpect].Value()
+	t.Expect = m.editInputs[editExpected].Value()
 
 	if v, err := strconv.Atoi(m.editInputs[editInterval].Value()); err == nil && v > 0 {
 		t.Interval = v
@@ -673,6 +680,9 @@ func (m *tuiModel) saveEdit() error {
 	}
 	if v, err := strconv.Atoi(m.editInputs[editRetries].Value()); err == nil && v > 0 {
 		t.Retries = v
+	}
+	if v, err := strconv.ParseFloat(m.editInputs[editThreshold].Value(), 64); err == nil && v > 0 {
+		t.Threshold = v
 	}
 
 	return db.UpdateTarget(t)
