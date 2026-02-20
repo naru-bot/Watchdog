@@ -13,7 +13,7 @@ func init() {
 	cmd := &cobra.Command{
 		Use:   "history <name|url|id>",
 		Short: "Show check history for a target",
-		Args:  cobra.ExactArgs(1),
+		Args:  requireArgs(1),
 		Run:   runHistory,
 	}
 	cmd.Flags().IntP("limit", "l", 20, "Number of results to show")

@@ -11,7 +11,7 @@ func init() {
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "pause <name|url|id>",
 		Short: "Pause monitoring for a target",
-		Args:  cobra.ExactArgs(1),
+		Args:  requireArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := db.SetPaused(args[0], true); err != nil {
 				exitError(err.Error())
@@ -28,7 +28,7 @@ func init() {
 		Use:   "unpause <name|url|id>",
 		Short: "Resume monitoring for a target",
 		Aliases: []string{"resume"},
-		Args:  cobra.ExactArgs(1),
+		Args:  requireArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := db.SetPaused(args[0], false); err != nil {
 				exitError(err.Error())

@@ -32,7 +32,7 @@ YAML format:
 Examples:
   watchdog import targets.yml
   watchdog import targets.yml --json`,
-		Args: cobra.ExactArgs(1),
+		Args: requireArgs(1),
 		Run:  runImport,
 	})
 }

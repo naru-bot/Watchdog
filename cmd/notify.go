@@ -64,7 +64,7 @@ Examples:
 	removeCmd := &cobra.Command{
 		Use:   "remove <name|id>",
 		Short: "Remove a notification channel",
-		Args:  cobra.ExactArgs(1),
+		Args:  requireArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			err := db.RemoveNotifyConfig(args[0])
 			if err != nil {

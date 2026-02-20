@@ -24,7 +24,7 @@ Examples:
   watchdog ping example.com --type dns
   watchdog ping https://api.example.com --expect "ok"
   watchdog ping https://example.com --count 5`,
-		Args: cobra.ExactArgs(1),
+		Args: requireArgs(1),
 		Run:  runPing,
 	}
 	cmd.Flags().StringP("type", "t", "http", "Check type: http, tcp, ping, dns")

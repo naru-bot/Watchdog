@@ -11,7 +11,7 @@ func init() {
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "remove <name|url|id>",
 		Short: "Remove a monitored target",
-		Args:  cobra.ExactArgs(1),
+		Args:  requireArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			err := db.RemoveTarget(args[0])
 			if err != nil {

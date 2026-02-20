@@ -22,7 +22,7 @@ Examples:
   watchdog add example.com --type ping
   watchdog add example.com --type dns
   watchdog add https://example.com --retries 3 --timeout 10`,
-		Args: cobra.ExactArgs(1),
+		Args: requireArgs(1),
 		Run:  runAdd,
 	}
 

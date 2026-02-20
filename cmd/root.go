@@ -177,4 +177,86 @@ PowerShell:
 	})
 }
 
+// requireArgs returns a cobra.PositionalArgs that shows helpful usage when args are missing.
+func requireArgs(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			fmt.Fprintf(os.Stderr, "Usage: %s\n", cmd.UseLine())
+			if cmd.Example != "" {
+				fmt.Fprintf(os.Stderr, "\nExamples:\n%s\n", cmd.Example)
+			} else if cmd.Long != "" {
+				// Try to extract examples from Long description
+				if idx := findExamplesInLong(cmd.Long); idx != "" {
+					fmt.Fprintf(os.Stderr, "\nExamples:\n%s\n", idx)
+				}
+			}
+			return fmt.Errorf("requires %d argument(s), see usage above", n)
+		}
+		if len(args) > n {
+			return fmt.Errorf("accepts %d argument(s), received %d", n, len(args))
+		}
+		return nil
+	}
+}
+
+// findExamplesInLong extracts example lines from a Long description.
+func findExamplesInLong(long string) string {
+	lines := splitLines(long)
+	inExamples := false
+	var examples []string
+	for _, line := range lines {
+		trimmed := trimString(line)
+		if trimmed == "Examples:" {
+			inExamples = true
+			continue
+		}
+		if inExamples {
+			if trimmed == "" && len(examples) > 0 {
+				break
+			}
+			if len(trimmed) > 0 {
+				examples = append(examples, line)
+			}
+		}
+	}
+	if len(examples) == 0 {
+		return ""
+	}
+	result := ""
+	for i, e := range examples {
+		if i > 0 {
+			result += "\n"
+		}
+		result += e
+	}
+	return result
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+func trimString(s string) string {
+	start := 0
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	end := len(s)
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
+}
+
 // end of file

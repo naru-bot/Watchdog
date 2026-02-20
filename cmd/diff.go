@@ -20,7 +20,7 @@ Examples:
   watchdog diff "My Site"
   watchdog diff https://example.com
   watchdog diff 1`,
-		Args: cobra.ExactArgs(1),
+		Args: requireArgs(1),
 		Run:  runDiff,
 	})
 }
