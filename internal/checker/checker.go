@@ -301,6 +301,19 @@ func findHeadlessBrowser() (string, []string) {
 	return "", nil
 }
 
+// snapWritableDir returns a temp directory that snap-confined Chromium can write to.
+// Snap Chromium can only write inside ~/snap/chromium/common/ due to AppArmor.
+// For non-snap browsers this still works fine as a regular temp dir.
+func snapWritableDir() string {
+	home := os.Getenv("HOME")
+	if home == "" {
+		home = "/"
+	}
+	snapDir := filepath.Join(home, "snap", "chromium", "common", "watchdog-tmp")
+	os.MkdirAll(snapDir, 0755)
+	return snapDir
+}
+
 // takeScreenshot captures a screenshot of the URL using headless browser
 func takeScreenshot(url, outputPath string, timeout time.Duration) error {
 	binary, args := findHeadlessBrowser()
@@ -308,9 +321,14 @@ func takeScreenshot(url, outputPath string, timeout time.Duration) error {
 		return fmt.Errorf("no headless browser found (run 'watchdog doctor' for install instructions)")
 	}
 
+	// Use a snap-writable temp path for the screenshot, then move it.
+	// Snap-confined Chromium cannot write to arbitrary paths.
+	tmpDir := snapWritableDir()
+	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("watchdog_shot_%d.png", time.Now().UnixNano()))
+
 	// Build command arguments
 	cmdArgs := append(args,
-		fmt.Sprintf("--screenshot=%s", outputPath),
+		fmt.Sprintf("--screenshot=%s", tmpFile),
 		"--window-size=1920,1080",
 		"--hide-scrollbars",
 		"--disable-background-timer-throttling",
@@ -330,7 +348,24 @@ func takeScreenshot(url, outputPath string, timeout time.Duration) error {
 		}()
 	}
 
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		os.Remove(tmpFile)
+		return err
+	}
+
+	// Move from snap-writable temp to the actual output path
+	if tmpFile != outputPath {
+		data, err := os.ReadFile(tmpFile)
+		os.Remove(tmpFile)
+		if err != nil {
+			return fmt.Errorf("failed to read temp screenshot: %w", err)
+		}
+		if err := os.WriteFile(outputPath, data, 0644); err != nil {
+			return fmt.Errorf("failed to write screenshot: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // compareImages compares two PNG images and returns the diff percentage
