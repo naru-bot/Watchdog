@@ -37,6 +37,11 @@ var dynamicPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`data-cf-settings="[a-f0-9]{20,}-\|`),
 	// Cloudflare beacon tokens
 	regexp.MustCompile(`"r":\d+`),
+	// Joomla CSRF tokens
+	regexp.MustCompile(`"csrf\.token"\s*:\s*"[a-f0-9]+"`),
+	regexp.MustCompile(`var\s+mtoken\s*=\s*"[a-f0-9]+"`),
+	// Dynamic module/component IDs (hex suffixed identifiers like mod_mt_listings6997d393167fa)
+	regexp.MustCompile(`(mod_\w+)[a-f0-9]{10,}`),
 }
 
 // stripDynamicContent removes known dynamic tokens from content before hashing.
