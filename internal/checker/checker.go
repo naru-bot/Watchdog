@@ -32,6 +32,11 @@ var dynamicPatterns = []*regexp.Regexp{
 	// HTML-encoded variants (e.g. in data-page attributes)
 	regexp.MustCompile(`(?:&quot;|&#34;)csrf_token(?:&quot;|&#34;)\s*:\s*(?:&quot;|&#34;)[^&]+(?:&quot;|&#34;)`),
 	regexp.MustCompile(`(?:&quot;|&#34;)_token(?:&quot;|&#34;)\s*:\s*(?:&quot;|&#34;)[^&]+(?:&quot;|&#34;)`),
+	// Cloudflare Rocket Loader tokens (random hex prefix on script type and data-cf-settings)
+	regexp.MustCompile(`type="[a-f0-9]{20,}-text/javascript"`),
+	regexp.MustCompile(`data-cf-settings="[a-f0-9]{20,}-\|`),
+	// Cloudflare beacon tokens
+	regexp.MustCompile(`"r":\d+`),
 }
 
 // stripDynamicContent removes known dynamic tokens from content before hashing.
