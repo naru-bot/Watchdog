@@ -360,7 +360,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, keys.Check):
 				if m.selected != nil {
 					m.status = fmt.Sprintf("Checking %s...", m.selected.Name)
-					return m, m.runCheck(m.selected)
+					cmd := m.runCheck(m.selected)
+					m.updateDetail()
+					return m, cmd
 				}
 			case msg.String() == "e":
 				if m.selected != nil {
