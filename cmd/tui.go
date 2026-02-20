@@ -523,6 +523,11 @@ func (m *tuiModel) updateDetail() {
 	sb.WriteString(fmt.Sprintf("Paused:   %v\n", t.Paused))
 	sb.WriteString("\n")
 
+	// Checking indicator
+	if m.checkingIDs[t.ID] {
+		sb.WriteString("⟳ Checking in progress…\n\n")
+	}
+
 	// Last error
 	lastResults, _ := db.GetCheckHistory(t.ID, 1)
 	if len(lastResults) > 0 && lastResults[0].Error != "" {
