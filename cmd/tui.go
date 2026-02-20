@@ -583,26 +583,19 @@ func (m *tuiModel) updateDetail() {
 	// Screenshot preview for visual targets
 	if t.Type == "visual" {
 		sb.WriteString("\n")
-		
 		currentPath := getScreenshotPath(t.ID, true)
 		previousPath := getScreenshotPath(t.ID, false)
-		
-		// Check if current screenshot exists
+
 		if _, err := os.Stat(currentPath); err == nil {
-			sb.WriteString("Current Screenshot:\n")
+			sb.WriteString("📸 Current Screenshot (s: full, S: previous):\n")
 			preview := generateScreenshotPreview(currentPath)
 			sb.WriteString(preview)
 			sb.WriteString("\n")
-			
-			// Show previous if it exists
 			if _, err := os.Stat(previousPath); err == nil {
-				sb.WriteString("\nPrevious Screenshot:\n")
-				prevPreview := generateScreenshotPreview(previousPath)
-				sb.WriteString(prevPreview)
-				sb.WriteString("\n")
+				sb.WriteString("  (previous screenshot available — press S to view)\n")
 			}
 		} else {
-			sb.WriteString("Screenshots: (no screenshots available)\n")
+			sb.WriteString("📸 No screenshots yet — run a check first\n")
 		}
 	}
 
@@ -799,7 +792,7 @@ func generateScreenshotPreview(screenshotPath string) string {
 	}
 	
 	// Run chafa to generate ANSI art
-	cmd := exec.Command("chafa", "--size=60x20", "--format=symbols", screenshotPath)
+	cmd := exec.Command("chafa", "--size=30x10", "--format=symbols", screenshotPath)
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Sprintf("(chafa error: %v)", err)
