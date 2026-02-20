@@ -119,7 +119,7 @@ func InitWithPath(path string) error {
 		threshold REAL DEFAULT 5.0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		paused INTEGER DEFAULT 0,
-		UNIQUE(url, selector)
+		UNIQUE(url, type, selector)
 	);
 
 	CREATE TABLE IF NOT EXISTS check_results (
@@ -168,6 +168,32 @@ func InitWithPath(path string) error {
 			// If it's not a duplicate column error, something else went wrong
 			return err
 		}
+	}
+
+	// Migration: Update unique constraint from (url, selector) to (url, type, selector)
+	// SQLite can't alter constraints, so we recreate the table
+	var tableSql string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='targets'").Scan(&tableSql)
+	if strings.Contains(tableSql, "UNIQUE(url, selector)") && !strings.Contains(tableSql, "UNIQUE(url, type, selector)") {
+		db.Exec(`CREATE TABLE targets_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			url TEXT NOT NULL,
+			type TEXT NOT NULL DEFAULT 'http',
+			interval_seconds INTEGER NOT NULL DEFAULT 300,
+			selector TEXT DEFAULT '',
+			headers TEXT DEFAULT '',
+			expect TEXT DEFAULT '',
+			timeout INTEGER DEFAULT 30,
+			retries INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			paused INTEGER DEFAULT 0,
+			threshold REAL DEFAULT 5.0,
+			UNIQUE(url, type, selector)
+		)`)
+		db.Exec(`INSERT INTO targets_new SELECT * FROM targets`)
+		db.Exec(`DROP TABLE targets`)
+		db.Exec(`ALTER TABLE targets_new RENAME TO targets`)
 	}
 	
 	return nil
