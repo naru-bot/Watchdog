@@ -523,11 +523,10 @@ func (m *tuiModel) updateDetail() {
 	}
 	sb.WriteString(fmt.Sprintf("Timeout:  %ds | Retries: %d\n", t.Timeout, t.Retries))
 	sb.WriteString(fmt.Sprintf("Paused:   %v\n", t.Paused))
-	sb.WriteString("\n")
-
-	// Checking indicator
 	if m.checkingIDs[t.ID] {
-		sb.WriteString("⟳ Checking in progress…\n\n")
+		sb.WriteString("          ⟳ checking…\n")
+	} else {
+		sb.WriteString("\n")
 	}
 
 	// Last error
