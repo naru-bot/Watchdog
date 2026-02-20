@@ -305,7 +305,7 @@ func findHeadlessBrowser() (string, []string) {
 func takeScreenshot(url, outputPath string, timeout time.Duration) error {
 	binary, args := findHeadlessBrowser()
 	if binary == "" {
-		return fmt.Errorf("no suitable headless browser found (tried chrome-headless-shell, chromium-browser, chromium, google-chrome)")
+		return fmt.Errorf("no headless browser found (run 'watchdog doctor' for install instructions)")
 	}
 
 	// Build command arguments
