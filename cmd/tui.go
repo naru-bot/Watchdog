@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/naru-bot/watchdog/internal/checker"
@@ -87,7 +89,25 @@ type view int
 const (
 	viewList view = iota
 	viewDetail
+	viewEdit
 )
+
+// Edit field indices
+const (
+	editName = iota
+	editURL
+	editType
+	editInterval
+	editTimeout
+	editRetries
+	editSelector
+	editExpect
+	editFieldCount
+)
+
+var editFieldLabels = [editFieldCount]string{
+	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect",
+}
 
 type keyMap struct {
 	Up      key.Binding
@@ -149,6 +169,8 @@ type tuiModel struct {
 	width      int
 	height     int
 	checking   bool
+	editInputs []textinput.Model
+	editFocus  int
 }
 
 func newTUIModel() tuiModel {
@@ -217,6 +239,35 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.help.Width = msg.Width
 
 	case tea.KeyMsg:
+		if m.view == viewEdit {
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.view = viewDetail
+				m.updateDetail()
+				return m, nil
+			case tea.KeyTab, tea.KeyDown:
+				m.editFocus = (m.editFocus + 1) % editFieldCount
+				return m, m.focusEditField()
+			case tea.KeyShiftTab, tea.KeyUp:
+				m.editFocus = (m.editFocus - 1 + editFieldCount) % editFieldCount
+				return m, m.focusEditField()
+			case tea.KeyEnter:
+				if err := m.saveEdit(); err != nil {
+					m.status = fmt.Sprintf("Error: %s", err)
+				} else {
+					m.status = fmt.Sprintf("✓ Updated: %s", m.selected.Name)
+					m.refreshData()
+					m.updateDetail()
+				}
+				m.view = viewDetail
+				return m, nil
+			}
+			// Update the focused input
+			var cmd tea.Cmd
+			m.editInputs[m.editFocus], cmd = m.editInputs[m.editFocus].Update(msg)
+			return m, cmd
+		}
+
 		if m.view == viewDetail {
 			switch {
 			case key.Matches(msg, keys.Quit), key.Matches(msg, keys.Back):
@@ -227,6 +278,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selected != nil {
 					m.status = fmt.Sprintf("Checking %s...", m.selected.Name)
 					return m, m.runCheck(m.selected)
+				}
+			case msg.String() == "e":
+				if m.selected != nil {
+					m.initEditInputs()
+					m.view = viewEdit
+					return m, m.focusEditField()
 				}
 			}
 			return m, nil
@@ -424,6 +481,68 @@ func (m *tuiModel) updateDetail() {
 	m.detail = sb.String()
 }
 
+func (m *tuiModel) initEditInputs() {
+	m.editInputs = make([]textinput.Model, editFieldCount)
+	t := m.selected
+
+	for i := 0; i < editFieldCount; i++ {
+		ti := textinput.New()
+		ti.Prompt = fmt.Sprintf("  %s: ", editFieldLabels[i])
+		ti.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
+		ti.CharLimit = 256
+		m.editInputs[i] = ti
+	}
+
+	m.editInputs[editName].SetValue(t.Name)
+	m.editInputs[editURL].SetValue(t.URL)
+	m.editInputs[editType].SetValue(t.Type)
+	m.editInputs[editType].Placeholder = "http, tcp, ping, dns"
+	m.editInputs[editInterval].SetValue(fmt.Sprintf("%d", t.Interval))
+	m.editInputs[editTimeout].SetValue(fmt.Sprintf("%d", t.Timeout))
+	m.editInputs[editRetries].SetValue(fmt.Sprintf("%d", t.Retries))
+	m.editInputs[editSelector].SetValue(t.Selector)
+	m.editInputs[editSelector].Placeholder = "CSS selector (optional)"
+	m.editInputs[editExpect].SetValue(t.Expect)
+	m.editInputs[editExpect].Placeholder = "Expected keyword (optional)"
+
+	m.editFocus = 0
+}
+
+func (m *tuiModel) focusEditField() tea.Cmd {
+	var cmds []tea.Cmd
+	for i := range m.editInputs {
+		if i == m.editFocus {
+			cmds = append(cmds, m.editInputs[i].Focus())
+			m.editInputs[i].TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA"))
+		} else {
+			m.editInputs[i].Blur()
+			m.editInputs[i].TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262"))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *tuiModel) saveEdit() error {
+	t := m.selected
+	t.Name = m.editInputs[editName].Value()
+	t.URL = m.editInputs[editURL].Value()
+	t.Type = m.editInputs[editType].Value()
+	t.Selector = m.editInputs[editSelector].Value()
+	t.Expect = m.editInputs[editExpect].Value()
+
+	if v, err := strconv.Atoi(m.editInputs[editInterval].Value()); err == nil && v > 0 {
+		t.Interval = v
+	}
+	if v, err := strconv.Atoi(m.editInputs[editTimeout].Value()); err == nil && v > 0 {
+		t.Timeout = v
+	}
+	if v, err := strconv.Atoi(m.editInputs[editRetries].Value()); err == nil && v > 0 {
+		t.Retries = v
+	}
+
+	return db.UpdateTarget(t)
+}
+
 func (m *tuiModel) runCheck(t *db.Target) tea.Cmd {
 	target := *t
 	return func() tea.Msg {
@@ -479,14 +598,31 @@ func (m tuiModel) View() string {
 	title := titleStyle.Render(" 🐕 Watchdog ")
 	sb.WriteString(title + "\n\n")
 
-	if m.view == viewDetail && m.selected != nil {
+	if m.view == viewEdit && m.selected != nil {
+		// Edit view
+		header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4")).Render(
+			fmt.Sprintf("Editing: %s", m.selected.Name))
+		sb.WriteString(header + "\n\n")
+
+		var fields strings.Builder
+		for i := 0; i < editFieldCount; i++ {
+			cursor := "  "
+			if i == m.editFocus {
+				cursor = "▸ "
+			}
+			fields.WriteString(cursor + m.editInputs[i].View() + "\n")
+		}
+		sb.WriteString(detailBoxStyle.Width(70).Render(fields.String()))
+		sb.WriteString("\n\n")
+		sb.WriteString(helpStyle.Render("↑↓/tab: navigate fields • enter: save • esc: cancel"))
+	} else if m.view == viewDetail && m.selected != nil {
 		// Detail view
 		header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4")).Render(
 			fmt.Sprintf("Target: %s", m.selected.Name))
 		sb.WriteString(header + "\n\n")
 		sb.WriteString(detailBoxStyle.Render(m.detail))
 		sb.WriteString("\n\n")
-		sb.WriteString(helpStyle.Render("c: check • esc: back"))
+		sb.WriteString(helpStyle.Render("e: edit • c: check • esc: back"))
 	} else {
 		// List view
 		sb.WriteString(m.table.View())
