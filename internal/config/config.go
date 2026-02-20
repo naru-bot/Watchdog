@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
@@ -50,8 +51,23 @@ func configPath() string {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "watchdog", "config.yml")
 	}
-	home, _ := os.UserHomeDir()
+	home := getHomeDir()
 	return filepath.Join(home, ".config", "watchdog", "config.yml")
+}
+
+// getHomeDir returns the current user's home directory reliably,
+// even in contexts where $HOME is not set (e.g. systemd services).
+func getHomeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return home
+	}
+	if u, err := user.Current(); err == nil {
+		return u.HomeDir
+	}
+	return "/"
 }
 
 func Load() *Config {

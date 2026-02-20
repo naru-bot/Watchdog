@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"time"
 
@@ -55,10 +56,39 @@ type NotifyConfig struct {
 var db *sql.DB
 
 func GetDBPath() string {
-	home, _ := os.UserHomeDir()
+	// Use XDG_DATA_HOME if set, otherwise fall back to ~/.watchdog
+	// This ensures consistency between CLI and daemon/systemd contexts
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		dir := filepath.Join(xdg, "watchdog")
+		os.MkdirAll(dir, 0755)
+		return filepath.Join(dir, "watchdog.db")
+	}
+
+	home := getHomeDir()
 	dir := filepath.Join(home, ".watchdog")
 	os.MkdirAll(dir, 0755)
 	return filepath.Join(dir, "watchdog.db")
+}
+
+// getHomeDir returns the current user's home directory reliably,
+// even in contexts where $HOME is not set (e.g. systemd services).
+func getHomeDir() string {
+	// Prefer $HOME if set
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+
+	// Fall back to os.UserHomeDir (reads /etc/passwd on Linux)
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return home
+	}
+
+	// Last resort: use current user from /etc/passwd via os/user
+	if u, err := user.Current(); err == nil {
+		return u.HomeDir
+	}
+
+	return "/"
 }
 
 func Init() error {
