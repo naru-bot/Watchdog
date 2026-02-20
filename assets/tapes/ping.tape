@@ -14,7 +14,7 @@ Type "watchdog ping https://example.com"
 Enter
 Sleep 3s
 
-Type "watchdog ping https://mosets.com"
+Type "watchdog ping https://httpbin.org/get"
 Enter
 Sleep 3s
 
