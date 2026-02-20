@@ -523,11 +523,7 @@ func (m *tuiModel) updateDetail() {
 	}
 	sb.WriteString(fmt.Sprintf("Timeout:  %ds | Retries: %d\n", t.Timeout, t.Retries))
 	sb.WriteString(fmt.Sprintf("Paused:   %v\n", t.Paused))
-	if m.checkingIDs[t.ID] {
-		sb.WriteString("          ⟳ checking…\n")
-	} else {
-		sb.WriteString("\n")
-	}
+	sb.WriteString("\n")
 
 	// Last error
 	lastResults, _ := db.GetCheckHistory(t.ID, 1)
@@ -548,7 +544,11 @@ func (m *tuiModel) updateDetail() {
 	// Recent history
 	results, _ := db.GetCheckHistory(t.ID, 10)
 	if len(results) > 0 {
-		sb.WriteString("\nRecent checks:\n")
+		if m.checkingIDs[t.ID] {
+			sb.WriteString("\nRecent checks: ⟳ checking…\n")
+		} else {
+			sb.WriteString("\nRecent checks:\n")
+		}
 		for _, r := range results {
 			icon := "●"
 			switch r.Status {
