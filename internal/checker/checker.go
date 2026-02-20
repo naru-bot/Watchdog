@@ -42,6 +42,14 @@ var dynamicPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`var\s+mtoken\s*=\s*"[a-f0-9]+"`),
 	// Dynamic module/component IDs (hex suffixed identifiers like mod_mt_listings6997d393167fa)
 	regexp.MustCompile(`(mod_\w+)[a-f0-9]{10,}`),
+	// Hidden form tokens (Laravel _token, etc.)
+	regexp.MustCompile(`name=["']_token["']\s+value=["'][^"']+["']`),
+	regexp.MustCompile(`value=["'][^"']+["']\s+name=["']_token["']`),
+	// Encrypted/base64 form values (honeypot fields, encrypted timestamps)
+	regexp.MustCompile(`value=["']eyJ[A-Za-z0-9+/=]{50,}["']`),
+	// Wire/Livewire snapshot data
+	regexp.MustCompile(`wire:snapshot=["'][^"']+["']`),
+	regexp.MustCompile(`wire:effects=["'][^"']+["']`),
 }
 
 // stripDynamicContent removes known dynamic tokens from content before hashing.
