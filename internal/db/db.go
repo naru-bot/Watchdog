@@ -228,6 +228,21 @@ func GetTarget(identifier string) (*Target, error) {
 	return &t, nil
 }
 
+func UpdateTarget(t *Target) error {
+	res, err := db.Exec(
+		`UPDATE targets SET name=?, url=?, type=?, interval_seconds=?, selector=?, headers=?, expect=?, timeout=?, retries=? WHERE id=?`,
+		t.Name, t.URL, t.Type, t.Interval, t.Selector, t.Headers, t.Expect, t.Timeout, t.Retries, t.ID,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("target not found: %d", t.ID)
+	}
+	return nil
+}
+
 func SaveCheckResult(r *CheckResult) error {
 	_, err := db.Exec(
 		"INSERT INTO check_results (target_id, status, status_code, response_time_ms, content_hash, error) VALUES (?, ?, ?, ?, ?, ?)",
