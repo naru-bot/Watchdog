@@ -32,6 +32,7 @@ Examples:
 type statusOutput struct {
 	Target        string  `json:"target"`
 	URL           string  `json:"url"`
+	Type          string  `json:"type"`
 	UptimePercent float64 `json:"uptime_percent"`
 	AvgResponseMs float64 `json:"avg_response_ms"`
 	MinResponseMs int64   `json:"min_response_ms"`
@@ -119,6 +120,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 		out := statusOutput{
 			Target:        t.Name,
 			URL:           t.URL,
+			Type:          t.Type,
 			UptimePercent: uptimePct,
 			AvgResponseMs: avgMs,
 			MinResponseMs: minMs,
@@ -139,8 +141,8 @@ func runStatus(cmd *cobra.Command, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "TARGET\tUPTIME\tAVG RESP\tCHECKS\tCHANGES\tRESPONSE\tSTATUS\n")
-	fmt.Fprintf(w, "──────\t──────\t────────\t──────\t───────\t────────\t──────\n")
+	fmt.Fprintf(w, "TARGET\tTYPE\tUPTIME\tAVG RESP\tCHECKS\tCHANGES\tRESPONSE\tSTATUS\n")
+	fmt.Fprintf(w, "──────\t────\t──────\t────────\t──────\t───────\t────────\t──────\n")
 
 	for _, o := range outputs {
 		// Color uptime
@@ -177,8 +179,8 @@ func runStatus(cmd *cobra.Command, args []string) {
 			statusStr += " " + shortErr
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%.0fms\t%d\t%d\t%s\t%s\n",
-			truncate(o.Target, 25), uptimeStr, o.AvgResponseMs, o.TotalChecks, o.Changes, o.Sparkline, statusStr)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%.0fms\t%d\t%d\t%s\t%s\n",
+			truncate(o.Target, 25), o.Type, uptimeStr, o.AvgResponseMs, o.TotalChecks, o.Changes, o.Sparkline, statusStr)
 	}
 	w.Flush()
 }
