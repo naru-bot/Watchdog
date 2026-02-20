@@ -111,7 +111,7 @@ var editFieldLabels = [editFieldCount]string{
 	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect", "Threshold (%)",
 }
 
-var typeOptions = []string{"http", "tcp", "ping", "dns", "visual"}
+var typeOptions = []string{"http", "tcp", "ping", "dns", "visual", "whois"}
 
 func nextType(current string) string {
 	for i, t := range typeOptions {

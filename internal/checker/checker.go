@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,8 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/likexian/whois"
+	whoisparser "github.com/likexian/whois-parser"
 	"github.com/naru-bot/watchdog/internal/db"
 )
 
@@ -73,7 +76,7 @@ type Result struct {
 	Content      string
 	Error        string
 	SSLExpiry    *time.Time
-	BodyMatch    *bool // nil if no expect keyword, true/false otherwise
+	BodyMatch    *bool   // nil if no expect keyword, true/false otherwise
 	DiffPercent  float64 // Visual diff percentage (for visual checks)
 }
 
@@ -108,6 +111,8 @@ func checkOnce(target *db.Target) *Result {
 		return checkDNS(target)
 	case "visual":
 		return checkVisual(target)
+	case "whois":
+		return checkWhois(target)
 	default:
 		return checkHTTP(target)
 	}
@@ -447,7 +452,7 @@ func checkVisual(target *db.Target) *Result {
 	if timeout <= 0 {
 		timeout = 60 * time.Second // Default 60s for visual checks
 	}
-	
+
 	threshold := target.Threshold
 	if threshold <= 0 {
 		threshold = 5.0
@@ -522,4 +527,160 @@ func checkVisual(target *db.Target) *Result {
 	}
 
 	return result
+}
+
+func checkWhois(target *db.Target) *Result {
+	start := time.Now()
+	result := &Result{}
+
+	// Extract domain from URL
+	domain, err := extractDomain(target.URL)
+	if err != nil {
+		result.Status = "error"
+		result.Error = "failed to extract domain: " + err.Error()
+		result.ResponseTime = time.Since(start)
+		return result
+	}
+
+	// Query WHOIS
+	whoisResult, err := whois.Whois(domain)
+	if err != nil {
+		result.Status = "error"
+		result.Error = "whois query failed: " + err.Error()
+		result.ResponseTime = time.Since(start)
+		return result
+	}
+
+	result.ResponseTime = time.Since(start)
+
+	// Parse WHOIS result
+	info, err := whoisparser.Parse(whoisResult)
+	if err != nil {
+		result.Status = "error"
+		result.Error = "failed to parse whois: " + err.Error()
+		return result
+	}
+
+	// Format content
+	content := formatWhoisContent(domain, &info)
+	result.Content = content
+
+	// Strip dynamic content and hash for change detection
+	normalized := stripWhoisDynamicContent(content)
+	hash := sha256.Sum256([]byte(normalized))
+	result.ContentHash = fmt.Sprintf("%x", hash)
+
+	// Check for expiry warning
+	if info.Domain != nil && info.Domain.ExpirationDate != "" {
+		if expiryDate, err := time.Parse("2006-01-02", info.Domain.ExpirationDate); err == nil {
+			daysUntilExpiry := int(time.Until(expiryDate).Hours() / 24)
+			if daysUntilExpiry < 30 {
+				result.Error = fmt.Sprintf("⚠ Domain expires in %d days", daysUntilExpiry)
+			}
+		}
+	}
+
+	// Compare with previous snapshot
+	snaps, err := db.GetLatestSnapshots(target.ID, 1)
+	if err == nil && len(snaps) > 0 {
+		if snaps[0].Hash != result.ContentHash {
+			result.Status = "changed"
+		} else {
+			result.Status = "unchanged"
+		}
+	} else {
+		result.Status = "up"
+	}
+
+	return result
+}
+
+// extractDomain extracts the registrable domain from a URL
+func extractDomain(rawURL string) (string, error) {
+	// Add protocol if missing
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "http://" + rawURL
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	domain := u.Hostname()
+	if domain == "" {
+		return "", fmt.Errorf("no hostname in URL")
+	}
+
+	// Remove common subdomains to get registrable domain
+	parts := strings.Split(domain, ".")
+	if len(parts) >= 2 {
+		// For now, just use last two parts (domain.tld)
+		// This is a simple approach that works for most cases
+		return strings.Join(parts[len(parts)-2:], "."), nil
+	}
+
+	return domain, nil
+}
+
+// formatWhoisContent formats the parsed WHOIS info into a readable format
+func formatWhoisContent(domain string, info *whoisparser.WhoisInfo) string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("Domain: %s\n", domain))
+
+	if info.Registrar != nil {
+		sb.WriteString(fmt.Sprintf("Registrar: %s\n", info.Registrar.Name))
+	}
+
+	if info.Domain != nil {
+		if info.Domain.CreatedDate != "" {
+			sb.WriteString(fmt.Sprintf("Created: %s\n", info.Domain.CreatedDate))
+		}
+		
+		if info.Domain.ExpirationDate != "" {
+			if expiryDate, err := time.Parse("2006-01-02", info.Domain.ExpirationDate); err == nil {
+				daysUntilExpiry := int(time.Until(expiryDate).Hours() / 24)
+				sb.WriteString(fmt.Sprintf("Expires: %s (%d days)\n", info.Domain.ExpirationDate, daysUntilExpiry))
+			} else {
+				sb.WriteString(fmt.Sprintf("Expires: %s\n", info.Domain.ExpirationDate))
+			}
+		}
+
+		if len(info.Domain.Status) > 0 {
+			sb.WriteString(fmt.Sprintf("Status: %s\n", strings.Join(info.Domain.Status, ", ")))
+		}
+	}
+
+	if len(info.Domain.NameServers) > 0 {
+		nameservers := strings.Join(info.Domain.NameServers, ", ")
+		sb.WriteString(fmt.Sprintf("Nameservers: %s\n", nameservers))
+	}
+
+	return sb.String()
+}
+
+// stripWhoisDynamicContent removes frequently changing fields before hashing
+func stripWhoisDynamicContent(content string) string {
+	// Remove timestamps and dates that change frequently
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`Updated:\s*[^\n]+`),
+		regexp.MustCompile(`Last updated on:\s*[^\n]+`),
+		regexp.MustCompile(`Last Modified:\s*[^\n]+`),
+		regexp.MustCompile(`>>> Last update of.*`),
+		regexp.MustCompile(`Record last updated.*`),
+		regexp.MustCompile(`Database last updated.*`),
+		// Remove dynamic query information
+		regexp.MustCompile(`Query time:\s*[^\n]+`),
+		regexp.MustCompile(`No match for.*`),
+	}
+
+	result := content
+	for _, pat := range patterns {
+		result = pat.ReplaceAllString(result, "")
+	}
+
+	// Normalize whitespace
+	result = regexp.MustCompile(`\s+`).ReplaceAllString(result, " ")
+	return strings.TrimSpace(result)
 }
