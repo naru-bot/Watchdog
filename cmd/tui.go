@@ -91,6 +91,7 @@ const (
 	viewDetail
 	viewEdit
 	viewAdd
+	viewData
 )
 
 // Edit field indices
@@ -193,7 +194,9 @@ type tuiModel struct {
 	height     int
 	checking   bool
 	editInputs []textinput.Model
-	editFocus  int
+	editFocus      int
+	snapshotData   string
+	snapshotScroll int
 }
 
 func newTUIModel() tuiModel {
@@ -370,6 +373,34 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.view = viewEdit
 					return m, m.focusEditField()
 				}
+			case msg.String() == "d":
+				if m.selected != nil {
+					snaps, _ := db.GetLatestSnapshots(m.selected.ID, 1)
+					if len(snaps) > 0 && snaps[0].Content != "" {
+						m.snapshotData = snaps[0].Content
+						m.snapshotScroll = 0
+						m.view = viewData
+					} else {
+						m.status = "No data available — run a check first"
+					}
+				}
+			}
+			return m, nil
+		}
+
+		if m.view == viewData {
+			switch {
+			case key.Matches(msg, keys.Quit), key.Matches(msg, keys.Back):
+				m.view = viewDetail
+				return m, nil
+			case key.Matches(msg, keys.Up):
+				if m.snapshotScroll > 0 {
+					m.snapshotScroll--
+				}
+				return m, nil
+			case key.Matches(msg, keys.Down):
+				m.snapshotScroll++
+				return m, nil
 			}
 			return m, nil
 		}
@@ -800,7 +831,32 @@ func (m tuiModel) View() string {
 		sb.WriteString(header + "\n\n")
 		sb.WriteString(detailBoxStyle.Render(m.detail))
 		sb.WriteString("\n\n")
-		sb.WriteString(helpStyle.Render("e: edit • c: check • esc: back"))
+		sb.WriteString(helpStyle.Render("e: edit • c: check • d: data • esc: back"))
+	} else if m.view == viewData && m.selected != nil {
+		header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4")).Render(
+			fmt.Sprintf("Data: %s", m.selected.Name))
+		sb.WriteString(header + "\n\n")
+
+		// Scrollable content
+		lines := strings.Split(m.snapshotData, "\n")
+		maxLines := m.height - 6
+		if maxLines < 5 {
+			maxLines = 5
+		}
+		if m.snapshotScroll > len(lines)-maxLines {
+			m.snapshotScroll = len(lines) - maxLines
+		}
+		if m.snapshotScroll < 0 {
+			m.snapshotScroll = 0
+		}
+		end := m.snapshotScroll + maxLines
+		if end > len(lines) {
+			end = len(lines)
+		}
+		visible := strings.Join(lines[m.snapshotScroll:end], "\n")
+		sb.WriteString(detailBoxStyle.Width(70).Render(visible))
+		sb.WriteString("\n\n")
+		sb.WriteString(helpStyle.Render("↑↓: scroll • esc: back"))
 	} else {
 		// List view
 		sb.WriteString(m.table.View())
