@@ -11,6 +11,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Available columns for status output
+var availableColumns = []string{
+	"name", "url", "type", "tags", "uptime", "avg", "min", "max",
+	"checks", "changes", "trend", "status", "last_checked", "interval",
+}
+
+var defaultColumns = []string{
+	"name", "type", "uptime", "avg", "checks", "changes", "trend", "status",
+}
+
 func init() {
 	cmd := &cobra.Command{
 		Use:   "status [name|url|id]",
@@ -19,13 +29,23 @@ func init() {
 
 Without arguments, shows summary for all targets.
 
+Customize columns with --columns (comma-separated):
+  name, url, type, tags, uptime, avg, min, max,
+  checks, changes, trend, status, last_checked, interval
+
 Examples:
   upp status
   upp status "My Site"
-  upp status --period 7d`,
+  upp status --period 7d
+  upp status --tag my-sites
+  upp status --columns name,uptime,avg,status
+  upp status --columns name,url,tags,uptime,trend,status
+  upp status --columns all`,
 		Run: runStatus,
 	}
 	cmd.Flags().StringP("period", "p", "24h", "Stats period: 1h, 24h, 7d, 30d")
+	cmd.Flags().String("tag", "", "Filter targets by tag")
+	cmd.Flags().String("columns", "", "Columns to display (comma-separated, or 'all')")
 	rootCmd.AddCommand(cmd)
 }
 
@@ -33,6 +53,7 @@ type statusOutput struct {
 	Target        string  `json:"target"`
 	URL           string  `json:"url"`
 	Type          string  `json:"type"`
+	Tags          string  `json:"tags,omitempty"`
 	UptimePercent float64 `json:"uptime_percent"`
 	AvgResponseMs float64 `json:"avg_response_ms"`
 	MinResponseMs int64   `json:"min_response_ms"`
@@ -43,11 +64,158 @@ type statusOutput struct {
 	LastChecked   string  `json:"last_checked,omitempty"`
 	Changes       int     `json:"content_changes"`
 	Sparkline     string  `json:"sparkline,omitempty"`
+	Interval      int     `json:"interval_seconds"`
+}
+
+func parseColumns(input string) []string {
+	if input == "" {
+		return defaultColumns
+	}
+	if input == "all" {
+		return availableColumns
+	}
+	parts := strings.Split(input, ",")
+	var cols []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		// Validate
+		valid := false
+		for _, a := range availableColumns {
+			if p == a {
+				valid = true
+				break
+			}
+		}
+		if valid {
+			cols = append(cols, p)
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: unknown column %q (available: %s)\n", p, strings.Join(availableColumns, ", "))
+		}
+	}
+	if len(cols) == 0 {
+		return defaultColumns
+	}
+	return cols
+}
+
+func columnHeader(col string) string {
+	switch col {
+	case "name":
+		return "TARGET"
+	case "url":
+		return "URL"
+	case "type":
+		return "TYPE"
+	case "tags":
+		return "TAGS"
+	case "uptime":
+		return "UPTIME"
+	case "avg":
+		return "AVG RESP"
+	case "min":
+		return "MIN RESP"
+	case "max":
+		return "MAX RESP"
+	case "checks":
+		return "CHECKS"
+	case "changes":
+		return "CHANGES"
+	case "trend":
+		return "TREND"
+	case "status":
+		return "STATUS"
+	case "last_checked":
+		return "LAST CHECKED"
+	case "interval":
+		return "INTERVAL"
+	default:
+		return strings.ToUpper(col)
+	}
+}
+
+func columnSeparator(col string) string {
+	h := columnHeader(col)
+	return strings.Repeat("─", len(h))
+}
+
+func columnValue(col string, o *statusOutput) string {
+	switch col {
+	case "name":
+		return truncate(o.Target, 25)
+	case "url":
+		return truncate(o.URL, 40)
+	case "type":
+		return o.Type
+	case "tags":
+		return truncate(o.Tags, 20)
+	case "uptime":
+		s := fmt.Sprintf("%.1f%%", o.UptimePercent)
+		if !noColor && !jsonOutput {
+			if o.UptimePercent >= 99.9 {
+				s = colorGreen(s)
+			} else if o.UptimePercent >= 95 {
+				s = colorYellow(s)
+			} else if o.TotalChecks > 0 {
+				s = colorRed(s)
+			}
+		}
+		return s
+	case "avg":
+		return fmt.Sprintf("%.0fms", o.AvgResponseMs)
+	case "min":
+		return fmt.Sprintf("%dms", o.MinResponseMs)
+	case "max":
+		return fmt.Sprintf("%dms", o.MaxResponseMs)
+	case "checks":
+		return fmt.Sprintf("%d", o.TotalChecks)
+	case "changes":
+		return fmt.Sprintf("%d", o.Changes)
+	case "trend":
+		return o.Sparkline
+	case "status":
+		s := o.LastStatus
+		if !noColor && !jsonOutput {
+			switch o.LastStatus {
+			case "up", "unchanged":
+				s = colorGreen("● " + o.LastStatus)
+			case "changed":
+				s = colorYellow("△ " + o.LastStatus)
+			case "down", "error":
+				s = colorRed("✗ " + o.LastStatus)
+			}
+		}
+		if o.LastError != "" && (o.LastStatus == "down" || o.LastStatus == "error") {
+			shortErr := shortenError(o.LastError)
+			if !noColor && !jsonOutput {
+				shortErr = colorRed(shortErr)
+			}
+			s += " " + shortErr
+		}
+		return s
+	case "last_checked":
+		if o.LastChecked == "" {
+			return "—"
+		}
+		if t, err := time.Parse(time.RFC3339, o.LastChecked); err == nil {
+			return time.Since(t).Round(time.Second).String() + " ago"
+		}
+		return o.LastChecked
+	case "interval":
+		return fmt.Sprintf("%ds", o.Interval)
+	default:
+		return ""
+	}
 }
 
 func runStatus(cmd *cobra.Command, args []string) {
 	period, _ := cmd.Flags().GetString("period")
 	since := parsePeriod(period)
+	tag, _ := cmd.Flags().GetString("tag")
+	colStr, _ := cmd.Flags().GetString("columns")
+	cols := parseColumns(colStr)
 
 	var targets []db.Target
 	if len(args) > 0 {
@@ -56,6 +224,12 @@ func runStatus(cmd *cobra.Command, args []string) {
 			exitError(err.Error())
 		}
 		targets = []db.Target{*t}
+	} else if tag != "" {
+		var err error
+		targets, err = db.ListTargetsByTag(tag)
+		if err != nil {
+			exitError(err.Error())
+		}
 	} else {
 		var err error
 		targets, err = db.ListTargets()
@@ -73,6 +247,15 @@ func runStatus(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Load tags if needed
+	var tagMap map[int64][]string
+	for _, c := range cols {
+		if c == "tags" {
+			tagMap, _ = db.GetTagMap()
+			break
+		}
+	}
+
 	var outputs []statusOutput
 
 	for _, t := range targets {
@@ -86,7 +269,6 @@ func runStatus(cmd *cobra.Command, args []string) {
 			uptimePct = float64(up) / float64(total) * 100
 		}
 
-		// Count changes + build sparkline
 		results, _ := db.GetCheckHistory(t.ID, 1000)
 		changes := 0
 		lastStatus := "unknown"
@@ -114,13 +296,20 @@ func runStatus(cmd *cobra.Command, args []string) {
 			responseTimes = append(responseTimes, r.ResponseTime)
 		}
 
-		// Build sparkline from last 20 checks (reversed to show oldest→newest)
 		spark := buildSparkline(responseTimes, 20)
+
+		tags := ""
+		if tagMap != nil {
+			if tt, ok := tagMap[t.ID]; ok {
+				tags = strings.Join(tt, ",")
+			}
+		}
 
 		out := statusOutput{
 			Target:        t.Name,
 			URL:           t.URL,
 			Type:          t.Type,
+			Tags:          tags,
 			UptimePercent: uptimePct,
 			AvgResponseMs: avgMs,
 			MinResponseMs: minMs,
@@ -131,6 +320,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 			LastChecked:   lastChecked,
 			Changes:       changes,
 			Sparkline:     spark,
+			Interval:      t.Interval,
 		}
 		outputs = append(outputs, out)
 	}
@@ -141,52 +331,29 @@ func runStatus(cmd *cobra.Command, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "TARGET\tTYPE\tUPTIME\tAVG RESP\tCHECKS\tCHANGES\tRESPONSE\tSTATUS\n")
-	fmt.Fprintf(w, "──────\t────\t──────\t────────\t──────\t───────\t────────\t──────\n")
 
-	for _, o := range outputs {
-		// Color uptime
-		uptimeStr := fmt.Sprintf("%.1f%%", o.UptimePercent)
-		if !noColor && !jsonOutput {
-			if o.UptimePercent >= 99.9 {
-				uptimeStr = colorGreen(uptimeStr)
-			} else if o.UptimePercent >= 95 {
-				uptimeStr = colorYellow(uptimeStr)
-			} else if o.TotalChecks > 0 {
-				uptimeStr = colorRed(uptimeStr)
-			}
+	// Header
+	var headers []string
+	var seps []string
+	for _, c := range cols {
+		headers = append(headers, columnHeader(c))
+		seps = append(seps, columnSeparator(c))
+	}
+	fmt.Fprintf(w, "%s\n", strings.Join(headers, "\t"))
+	fmt.Fprintf(w, "%s\n", strings.Join(seps, "\t"))
+
+	// Rows
+	for i := range outputs {
+		var vals []string
+		for _, c := range cols {
+			vals = append(vals, columnValue(c, &outputs[i]))
 		}
-
-		// Color status
-		statusStr := o.LastStatus
-		if !noColor && !jsonOutput {
-			switch o.LastStatus {
-			case "up", "unchanged":
-				statusStr = colorGreen("● " + o.LastStatus)
-			case "changed":
-				statusStr = colorYellow("△ " + o.LastStatus)
-			case "down", "error":
-				statusStr = colorRed("✗ " + o.LastStatus)
-			}
-		}
-
-		// Append short error to status if down
-		if o.LastError != "" && (o.LastStatus == "down" || o.LastStatus == "error") {
-			shortErr := shortenError(o.LastError)
-			if !noColor && !jsonOutput {
-				shortErr = colorRed(shortErr)
-			}
-			statusStr += " " + shortErr
-		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%.0fms\t%d\t%d\t%s\t%s\n",
-			truncate(o.Target, 25), o.Type, uptimeStr, o.AvgResponseMs, o.TotalChecks, o.Changes, o.Sparkline, statusStr)
+		fmt.Fprintf(w, "%s\n", strings.Join(vals, "\t"))
 	}
 	w.Flush()
 }
 
 func shortenError(err string) string {
-	// Extract meaningful part from verbose Go errors
 	if idx := strings.LastIndex(err, ": "); idx != -1 {
 		err = err[idx+2:]
 	}
@@ -201,18 +368,15 @@ func buildSparkline(values []int64, maxLen int) string {
 		return ""
 	}
 
-	// Reverse (history is newest-first, we want oldest→newest)
 	reversed := make([]int64, len(values))
 	for i, v := range values {
 		reversed[len(values)-1-i] = v
 	}
 
-	// Trim to maxLen
 	if len(reversed) > maxLen {
 		reversed = reversed[len(reversed)-maxLen:]
 	}
 
-	// Find min/max
 	min, max := reversed[0], reversed[0]
 	for _, v := range reversed {
 		if v < min {
