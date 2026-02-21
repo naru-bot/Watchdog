@@ -54,11 +54,11 @@ func runWatch(cmd *cobra.Command, args []string) {
 }
 
 // padRight pads a string with spaces to the given visible width.
-// It accounts for ANSI escape codes not counting as visible characters.
+// It accounts for ANSI escape codes and multi-byte UTF-8 characters.
 func padRight(s string, width int) string {
-	// Strip ANSI codes to get visible length
 	visible := stripAnsi(s)
-	pad := width - len(visible)
+	visLen := len([]rune(visible))
+	pad := width - visLen
 	if pad <= 0 {
 		return s
 	}
