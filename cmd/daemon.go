@@ -9,6 +9,7 @@ import (
 
 	"github.com/naru-bot/upp/internal/checker"
 	"github.com/naru-bot/upp/internal/db"
+	"github.com/naru-bot/upp/internal/trigger"
 	"github.com/spf13/cobra"
 )
 
@@ -86,7 +87,14 @@ func runDaemon(cmd *cobra.Command, args []string) {
 					now.Format("15:04:05"), icon, t.Name, result.Status, result.ResponseTime.Milliseconds())
 
 				if result.Status == "down" || result.Status == "changed" || result.Status == "error" {
-					sendNotifications(t.Name, t.URL, result.Status, result.Error)
+					shouldNotify := true
+					if t.TriggerRule != "" {
+						triggered, _ := trigger.Evaluate(t.TriggerRule, result.Content)
+						shouldNotify = triggered
+					}
+					if shouldNotify {
+						sendNotifications(t.Name, t.URL, result.Status, result.Error)
+					}
 				}
 			}
 		}

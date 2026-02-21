@@ -661,7 +661,7 @@ func (m *tuiModel) saveAdd() error {
 		threshold = v
 	}
 
-	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold)
+	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold, "", "")
 	return err
 }
 
