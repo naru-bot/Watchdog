@@ -109,11 +109,12 @@ const (
 	editThreshold
 	editTriggerIf
 	editJQ
+	editTags
 	editFieldCount
 )
 
 var editFieldLabels = [editFieldCount]string{
-	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect", "Threshold (%)", "Trigger If", "jq Filter",
+	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect", "Threshold (%)", "Trigger If", "jq Filter", "Tags",
 }
 
 var typeOptions = []string{"http", "tcp", "ping", "dns", "visual", "whois"}
@@ -765,6 +766,7 @@ func (m *tuiModel) initAddInputs() {
 	m.editInputs[editThreshold].SetValue("5.0")
 	m.editInputs[editTriggerIf].Placeholder = "contains:text / not_contains:text / regex:pattern (optional)"
 	m.editInputs[editJQ].Placeholder = "jq expression, e.g. .data.status (optional)"
+	m.editInputs[editTags].Placeholder = "comma-separated tags (e.g. my-sites, production)"
 
 	m.editFocus = 0
 }
@@ -807,8 +809,15 @@ func (m *tuiModel) saveAdd() error {
 	}
 	jqFilter := m.editInputs[editJQ].Value()
 
-	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold, db.AddTargetOpts{TriggerRule: triggerRule, JQFilter: jqFilter})
-	return err
+	target, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold, db.AddTargetOpts{TriggerRule: triggerRule, JQFilter: jqFilter})
+	if err != nil {
+		return err
+	}
+	if v := m.editInputs[editTags].Value(); v != "" {
+		tags := splitTags(v)
+		db.AddTags(target.ID, tags)
+	}
+	return nil
 }
 
 func (m *tuiModel) initEditInputs() {
@@ -845,6 +854,10 @@ func (m *tuiModel) initEditInputs() {
 	m.editInputs[editTriggerIf].Placeholder = "contains:text / not_contains:text / regex:pattern (optional)"
 	m.editInputs[editJQ].SetValue(t.JQFilter)
 	m.editInputs[editJQ].Placeholder = "jq expression, e.g. .data.status (optional)"
+	if tags, ok := m.tagMap[t.ID]; ok && len(tags) > 0 {
+		m.editInputs[editTags].SetValue(strings.Join(tags, ", "))
+	}
+	m.editInputs[editTags].Placeholder = "comma-separated tags (e.g. my-sites, production)"
 
 	m.editFocus = 0
 }
@@ -894,6 +907,13 @@ func (m *tuiModel) saveEdit() error {
 		t.TriggerRule = ""
 	}
 	t.JQFilter = m.editInputs[editJQ].Value()
+
+	// Sync tags: replace all with what's in the field
+	db.ClearTags(t.ID)
+	if v := m.editInputs[editTags].Value(); v != "" {
+		tags := splitTags(v)
+		db.AddTags(t.ID, tags)
+	}
 
 	return db.UpdateTarget(t)
 }
@@ -1060,4 +1080,15 @@ func (m tuiModel) View() string {
 	}
 
 	return sb.String()
+}
+
+func splitTags(s string) []string {
+	var tags []string
+	for _, t := range strings.Split(s, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
 }
