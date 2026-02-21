@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/naru-bot/upp/internal/checker"
 	"github.com/naru-bot/upp/internal/db"
+	"github.com/naru-bot/upp/internal/trigger"
 	"github.com/spf13/cobra"
 )
 
@@ -105,11 +107,13 @@ const (
 	editSelector
 	editExpected
 	editThreshold
+	editTriggerIf
+	editJQ
 	editFieldCount
 )
 
 var editFieldLabels = [editFieldCount]string{
-	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect", "Threshold (%)",
+	"Name", "URL", "Type", "Interval (s)", "Timeout (s)", "Retries", "Selector", "Expect", "Threshold (%)", "Trigger If", "jq Filter",
 }
 
 var typeOptions = []string{"http", "tcp", "ping", "dns", "visual", "whois"}
@@ -552,6 +556,12 @@ func (m *tuiModel) updateDetail() {
 	if t.Expect != "" {
 		sb.WriteString(fmt.Sprintf("Expect:   %s\n", t.Expect))
 	}
+	if t.JQFilter != "" {
+		sb.WriteString(fmt.Sprintf("jq:       %s\n", t.JQFilter))
+	}
+	if t.TriggerRule != "" {
+		sb.WriteString(fmt.Sprintf("Trigger:  %s\n", trigger.Describe(t.TriggerRule)))
+	}
 	sb.WriteString(fmt.Sprintf("Timeout:  %ds | Retries: %d\n", t.Timeout, t.Retries))
 	sb.WriteString(fmt.Sprintf("Paused:   %v\n", t.Paused))
 	sb.WriteString("\n")
@@ -629,6 +639,8 @@ func (m *tuiModel) initAddInputs() {
 	m.editInputs[editSelector].Placeholder = "CSS selector (optional)"
 	m.editInputs[editExpected].Placeholder = "Expected keyword (optional)"
 	m.editInputs[editThreshold].SetValue("5.0")
+	m.editInputs[editTriggerIf].Placeholder = "contains:text / not_contains:text / regex:pattern (optional)"
+	m.editInputs[editJQ].Placeholder = "jq expression, e.g. .data.status (optional)"
 
 	m.editFocus = 0
 }
@@ -661,7 +673,17 @@ func (m *tuiModel) saveAdd() error {
 		threshold = v
 	}
 
-	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold, "", "")
+	triggerRule := ""
+	if v := m.editInputs[editTriggerIf].Value(); v != "" {
+		parsed, err := trigger.ParseShorthand(v)
+		if err != nil {
+			return err
+		}
+		triggerRule = parsed
+	}
+	jqFilter := m.editInputs[editJQ].Value()
+
+	_, err := db.AddTarget(name, url, typ, interval, selector, "", expect, timeout, retries, threshold, triggerRule, jqFilter)
 	return err
 }
 
@@ -689,6 +711,16 @@ func (m *tuiModel) initEditInputs() {
 	m.editInputs[editExpected].SetValue(t.Expect)
 	m.editInputs[editExpected].Placeholder = "Expected keyword (optional)"
 	m.editInputs[editThreshold].SetValue(fmt.Sprintf("%.1f", t.Threshold))
+	// Show trigger rule in shorthand form for editing
+	if t.TriggerRule != "" {
+		var r trigger.Rule
+		if err := json.Unmarshal([]byte(t.TriggerRule), &r); err == nil {
+			m.editInputs[editTriggerIf].SetValue(r.Type + ":" + r.Value)
+		}
+	}
+	m.editInputs[editTriggerIf].Placeholder = "contains:text / not_contains:text / regex:pattern (optional)"
+	m.editInputs[editJQ].SetValue(t.JQFilter)
+	m.editInputs[editJQ].Placeholder = "jq expression, e.g. .data.status (optional)"
 
 	m.editFocus = 0
 }
@@ -727,6 +759,17 @@ func (m *tuiModel) saveEdit() error {
 	if v, err := strconv.ParseFloat(m.editInputs[editThreshold].Value(), 64); err == nil && v > 0 {
 		t.Threshold = v
 	}
+
+	if v := m.editInputs[editTriggerIf].Value(); v != "" {
+		parsed, err := trigger.ParseShorthand(v)
+		if err != nil {
+			return err
+		}
+		t.TriggerRule = parsed
+	} else {
+		t.TriggerRule = ""
+	}
+	t.JQFilter = m.editInputs[editJQ].Value()
 
 	return db.UpdateTarget(t)
 }
