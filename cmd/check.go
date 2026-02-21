@@ -71,6 +71,10 @@ func runCheck(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		if !jsonOutput && !quiet {
+			fmt.Printf("  ⟳ Checking %s...\r", t.Name)
+		}
+
 		result := checker.Check(&t)
 
 		// Save check result
@@ -116,15 +120,51 @@ func runCheck(cmd *cobra.Command, args []string) {
 		}
 
 		if !jsonOutput {
+			// Clear the "checking" line
+			fmt.Printf("\r\033[K")
+
 			icon := statusIcon(result.Status)
-			fmt.Printf("%s %s (%s) — %s [%dms]",
-				icon, t.Name, t.URL, result.Status, result.ResponseTime.Milliseconds())
+			statusText := result.Status
+			nameText := t.Name
+			urlText := fmt.Sprintf("(%s)", t.URL)
+			respText := fmt.Sprintf("[%dms]", result.ResponseTime.Milliseconds())
+
+			if !noColor {
+				switch result.Status {
+				case "up", "unchanged":
+					icon = colorGreen(icon)
+					statusText = colorGreen(statusText)
+				case "changed":
+					icon = colorYellow(icon)
+					statusText = colorYellow(statusText)
+				case "down", "error":
+					icon = colorRed(icon)
+					statusText = colorRed(statusText)
+				}
+				nameText = colorBold(t.Name)
+				urlText = colorCyan(fmt.Sprintf("(%s)", t.URL))
+			}
+
+			fmt.Printf("%s %s %s — %s %s",
+				icon, nameText, urlText, statusText, respText)
 			if result.Error != "" {
-				fmt.Printf(" (%s)", result.Error)
+				errText := result.Error
+				if !noColor {
+					errText = colorRed(errText)
+				}
+				fmt.Printf(" (%s)", errText)
 			}
 			if result.SSLExpiry != nil {
 				days := int(time.Until(*result.SSLExpiry).Hours() / 24)
-				fmt.Printf(" [SSL: %dd]", days)
+				sslText := fmt.Sprintf("[SSL: %dd]", days)
+				if !noColor {
+					if days < 14 {
+						sslText = colorRed(sslText)
+					} else if days < 30 {
+						sslText = colorYellow(sslText)
+					}
+				}
+				fmt.Printf(" %s", sslText)
 			}
 			fmt.Println()
 		}
