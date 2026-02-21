@@ -23,6 +23,8 @@
   - [Interactive TUI Dashboard](#-interactive-tui-dashboard)
   - [Uptime Monitoring with Sparklines](#-uptime-monitoring-with-sparklines)
   - [Change Detection + Diff](#-change-detection--diff)
+  - [Conditional Triggers](#-conditional-triggers)
+  - [JSON API Monitoring (jq)](#-json-api-monitoring-jq)
   - [Quick Ping Diagnostics](#-quick-ping-diagnostics)
   - [JSON Output for AI Agents](#-json-output-for-ai-agents)
   - [Notifications](#-notifications)
@@ -119,6 +121,48 @@ Monitor pages for content changes. Target specific elements with CSS selectors. 
 upp add https://example.com/pricing --name "Pricing" --selector "div.price"
 upp check "Pricing"
 upp diff "Pricing"
+```
+
+---
+
+### 🎯 Conditional Triggers
+
+Only get notified when specific conditions are met. Reduce alert noise by filtering on content.
+
+```bash
+# Alert only when "out of stock" appears
+upp add https://store.example.com/product --trigger-if "contains:out of stock"
+
+# Alert when "healthy" disappears from status page
+upp add https://example.com/status --trigger-if "not_contains:healthy"
+
+# Alert on regex pattern match
+upp add https://example.com/pricing --trigger-if "regex:price.*\$[5-9][0-9]"
+
+# Combine with CSS selectors or jq for precise monitoring
+upp add https://example.com/api --jq '.status' --trigger-if "not_contains:ok"
+```
+
+Trigger types: `contains`, `not_contains`, `regex`, `not_regex`
+
+---
+
+### 📡 JSON API Monitoring (jq)
+
+Monitor JSON APIs with built-in jq filtering. Extract specific fields before change detection — only track what matters.
+
+```bash
+# Monitor a specific field in a JSON API
+upp add https://api.example.com/v1/status --jq '.services.database.status' --name "DB Status"
+
+# Track price changes from a JSON endpoint
+upp add https://api.store.com/product/123 --jq '.price' --name "Product Price"
+
+# Extract nested data
+upp add https://api.example.com/data --jq '.items[] | {name, status}' --name "Items"
+
+# Combine with triggers — alert only when price drops below threshold
+upp add https://api.store.com/product/123 --jq '.price' --trigger-if "regex:^[0-9]\."
 ```
 
 ---
@@ -270,6 +314,8 @@ When using the TUI add/edit screen, these fields control how your targets are mo
 | Selector | CSS selector to monitor specific page element | http |
 | Expect | Expected keyword in response body | http |
 | Threshold (%) | Visual diff percentage to trigger change (default: 5.0) | visual |
+| Trigger Rule | Conditional notification rule (e.g. `contains:text`, `regex:pattern`) | All types |
+| jq Filter | jq expression to filter JSON API responses before change detection | http |
 
 ---
 

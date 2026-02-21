@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/naru-bot/upp/internal/db"
+	"github.com/naru-bot/upp/internal/trigger"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,9 @@ Examples:
   upp edit "My Site" --interval 60 --timeout 10
   upp edit 1 --selector "div.content" --expect "Welcome"
   upp edit "My Site" --retries 3 --type tcp
-  upp edit 1 --headers '{"Authorization":"Bearer xxx"}'`,
+  upp edit 1 --headers '{"Authorization":"Bearer xxx"}'
+  upp edit "My API" --jq '.data.status'
+  upp edit "My Site" --trigger-if "contains:error"`,
 		Args: requireArgs(1),
 		Run:  runEdit,
 	}
@@ -35,9 +38,13 @@ Examples:
 	cmd.Flags().String("expect", "", "Expected keyword in response body")
 	cmd.Flags().Int("timeout", 0, "Request timeout in seconds")
 	cmd.Flags().Int("retries", 0, "Retry count before marking as down")
+	cmd.Flags().String("trigger-if", "", "Conditional trigger rule (e.g. 'contains:text', 'regex:pattern')")
+	cmd.Flags().String("jq", "", "jq filter for JSON API responses")
 	cmd.Flags().Bool("clear-selector", false, "Clear the CSS selector")
 	cmd.Flags().Bool("clear-headers", false, "Clear custom headers")
 	cmd.Flags().Bool("clear-expect", false, "Clear expected keyword")
+	cmd.Flags().Bool("clear-trigger", false, "Clear the trigger rule")
+	cmd.Flags().Bool("clear-jq", false, "Clear the jq filter")
 
 	rootCmd.AddCommand(cmd)
 }
@@ -86,6 +93,27 @@ func runEdit(cmd *cobra.Command, args []string) {
 		target.Retries, _ = cmd.Flags().GetInt("retries")
 		changed = true
 	}
+	if cmd.Flags().Changed("trigger-if") {
+		triggerIF, _ := cmd.Flags().GetString("trigger-if")
+		rule, err := trigger.ParseShorthand(triggerIF)
+		if err != nil {
+			exitError(err.Error())
+		}
+		target.TriggerRule = rule
+		changed = true
+	}
+	if cmd.Flags().Changed("jq") {
+		target.JQFilter, _ = cmd.Flags().GetString("jq")
+		changed = true
+	}
+	if v, _ := cmd.Flags().GetBool("clear-trigger"); v {
+		target.TriggerRule = ""
+		changed = true
+	}
+	if v, _ := cmd.Flags().GetBool("clear-jq"); v {
+		target.JQFilter = ""
+		changed = true
+	}
 	if v, _ := cmd.Flags().GetBool("clear-selector"); v {
 		target.Selector = ""
 		changed = true
@@ -117,6 +145,12 @@ func runEdit(cmd *cobra.Command, args []string) {
 		}
 		if target.Expect != "" {
 			fmt.Printf(" | Expect: %q", target.Expect)
+		}
+		if target.JQFilter != "" {
+			fmt.Printf(" | jq: %s", target.JQFilter)
+		}
+		if target.TriggerRule != "" {
+			fmt.Printf(" | Trigger: %s", trigger.Describe(target.TriggerRule))
 		}
 		fmt.Println()
 	}

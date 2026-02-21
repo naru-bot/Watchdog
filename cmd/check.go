@@ -8,6 +8,7 @@ import (
 	"github.com/naru-bot/upp/internal/config"
 	"github.com/naru-bot/upp/internal/db"
 	"github.com/naru-bot/upp/internal/notify"
+	"github.com/naru-bot/upp/internal/trigger"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +36,7 @@ type checkOutput struct {
 	ResponseMs   int64  `json:"response_time_ms"`
 	ContentHash  string `json:"content_hash,omitempty"`
 	Changed      bool   `json:"changed"`
+	Triggered    *bool  `json:"triggered,omitempty"`
 	Error        string `json:"error,omitempty"`
 	SSLDaysLeft  *int   `json:"ssl_days_left,omitempty"`
 }
@@ -115,9 +117,17 @@ func runCheck(cmd *cobra.Command, args []string) {
 
 		outputs = append(outputs, out)
 
-		// Send notifications if down or changed
+		// Evaluate trigger rule and send notifications
 		if result.Status == "down" || result.Status == "changed" || result.Status == "error" {
-			sendNotifications(t.Name, t.URL, result.Status, result.Error)
+			shouldNotify := true
+			if t.TriggerRule != "" {
+				triggered, _ := trigger.Evaluate(t.TriggerRule, result.Content)
+				shouldNotify = triggered
+				out.Triggered = &triggered
+			}
+			if shouldNotify {
+				sendNotifications(t.Name, t.URL, result.Status, result.Error)
+			}
 		}
 
 		if !jsonOutput {

@@ -3,6 +3,7 @@ package checker
 import (
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"image/png"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/itchyny/gojq"
 	"github.com/likexian/whois"
 	whoisparser "github.com/likexian/whois-parser"
 	"github.com/naru-bot/upp/internal/db"
@@ -169,9 +171,46 @@ func checkHTTP(target *db.Target) *Result {
 		return result
 	}
 
-	// Extract content based on selector
+	// Apply jq filter if set (for JSON API monitoring)
 	content := string(body)
-	if target.Selector != "" {
+	if target.JQFilter != "" {
+		var jsonData interface{}
+		if err := json.Unmarshal(body, &jsonData); err != nil {
+			result.Status = "error"
+			result.Error = "response is not valid JSON: " + err.Error()
+			return result
+		}
+		query, err := gojq.Parse(target.JQFilter)
+		if err != nil {
+			result.Status = "error"
+			result.Error = "invalid jq filter: " + err.Error()
+			return result
+		}
+		var filtered []string
+		iter := query.Run(jsonData)
+		for {
+			v, ok := iter.Next()
+			if !ok {
+				break
+			}
+			if err, isErr := v.(error); isErr {
+				result.Status = "error"
+				result.Error = "jq filter error: " + err.Error()
+				return result
+			}
+			switch val := v.(type) {
+			case string:
+				filtered = append(filtered, val)
+			default:
+				b, _ := json.MarshalIndent(val, "", "  ")
+				filtered = append(filtered, string(b))
+			}
+		}
+		content = strings.Join(filtered, "\n")
+	}
+
+	// Extract content based on selector (for HTML pages)
+	if target.JQFilter == "" && target.Selector != "" {
 		doc, err := goquery.NewDocumentFromReader(strings.NewReader(content))
 		if err == nil {
 			var selected []string

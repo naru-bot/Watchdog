@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/naru-bot/upp/internal/db"
+	"github.com/naru-bot/upp/internal/trigger"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +23,12 @@ Examples:
   upp add example.com --type ping
   upp add example.com --type dns
   upp add https://example.com --retries 3 --timeout 10
-  upp add https://example.com --type visual --threshold 7.5`,
+  upp add https://example.com --type visual --threshold 7.5
+  upp add https://example.com --trigger-if "contains:out of stock"
+  upp add https://example.com --trigger-if "not_contains:in stock"
+  upp add https://example.com --trigger-if "regex:price.*\$[0-9]+"
+  upp add https://api.example.com/data --jq '.items[].name'
+  upp add https://api.example.com/v1/status --jq '.status' --trigger-if "not_contains:healthy"`,
 		Args: requireArgs(1),
 		Run:  runAdd,
 	}
@@ -36,6 +42,8 @@ Examples:
 	cmd.Flags().Int("timeout", 30, "Request timeout in seconds")
 	cmd.Flags().Int("retries", 1, "Retry count before marking as down")
 	cmd.Flags().Float64("threshold", 5.0, "Visual diff threshold percentage (visual type only)")
+	cmd.Flags().String("trigger-if", "", "Conditional trigger rule (e.g. 'contains:text', 'regex:pattern')")
+	cmd.Flags().String("jq", "", "jq filter for JSON API responses")
 
 	rootCmd.AddCommand(cmd)
 }
@@ -51,8 +59,20 @@ func runAdd(cmd *cobra.Command, args []string) {
 	timeout, _ := cmd.Flags().GetInt("timeout")
 	retries, _ := cmd.Flags().GetInt("retries")
 	threshold, _ := cmd.Flags().GetFloat64("threshold")
+	triggerIF, _ := cmd.Flags().GetString("trigger-if")
+	jqFilter, _ := cmd.Flags().GetString("jq")
 
-	target, err := db.AddTarget(name, url, typ, interval, selector, headers, expect, timeout, retries, threshold)
+	// Parse trigger rule shorthand
+	var triggerRule string
+	if triggerIF != "" {
+		rule, err := trigger.ParseShorthand(triggerIF)
+		if err != nil {
+			exitError(err.Error())
+		}
+		triggerRule = rule
+	}
+
+	target, err := db.AddTarget(name, url, typ, interval, selector, headers, expect, timeout, retries, threshold, triggerRule, jqFilter)
 	if err != nil {
 		exitError(err.Error())
 	}
@@ -70,6 +90,12 @@ func runAdd(cmd *cobra.Command, args []string) {
 		}
 		if target.Type == "visual" && target.Threshold > 0 {
 			fmt.Printf(" | Threshold: %.1f%%", target.Threshold)
+		}
+		if target.JQFilter != "" {
+			fmt.Printf(" | jq: %s", target.JQFilter)
+		}
+		if target.TriggerRule != "" {
+			fmt.Printf(" | Trigger: %s", trigger.Describe(target.TriggerRule))
 		}
 		fmt.Println()
 	}
