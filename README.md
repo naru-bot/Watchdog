@@ -121,8 +121,6 @@ upp check "Pricing"
 upp diff "Pricing"
 ```
 
-![Change Detection](assets/change-detection.gif)
-
 ---
 
 ### ⚡ Quick Ping Diagnostics
