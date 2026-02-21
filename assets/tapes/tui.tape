@@ -3,7 +3,7 @@ Output assets/tui.gif
 
 Set FontSize 18
 Set Width 1200
-Set Height 600
+Set Height 900
 Set LineHeight 1.3
 Set Padding 20
 Set Theme "Catppuccin Mocha"
