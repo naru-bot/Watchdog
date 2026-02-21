@@ -76,8 +76,8 @@ func renderDashboard() {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
-		colorBold("TARGET"), colorBold("STATUS"), colorBold("UPTIME"), colorBold("RESP"), colorBold("CHANGES"), colorBold("LAST CHECK"))
-	fmt.Fprintf(w, "  ──────\t──────\t──────\t────\t───────\t──────────\n")
+		colorBold("TARGET"), colorBold("UPTIME"), colorBold("RESP"), colorBold("CHANGES"), colorBold("LAST CHECK"), colorBold("STATUS"))
+	fmt.Fprintf(w, "  ──────\t──────\t────\t───────\t──────────\t──────\n")
 
 	for _, t := range targets {
 		// Read latest result from DB (daemon handles the actual checking)
@@ -137,9 +137,9 @@ func renderDashboard() {
 			uptimeStr = colorRed(uptimeStr)
 		}
 
-		_ = respMs // use avgMs for display consistency
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%.0fms\t%d\t%s\n",
-			truncate(t.Name, 25), statusStr, uptimeStr, avgMs, changes, lastChecked)
+		_ = respMs
+		fmt.Fprintf(w, "  %s\t%s\t%.0fms\t%d\t%s\t%s\n",
+			truncate(t.Name, 25), uptimeStr, avgMs, changes, lastChecked, statusStr)
 	}
 	w.Flush()
 	fmt.Printf("\n%s targets monitored\n", colorCyan(fmt.Sprintf("%d", len(targets))))
