@@ -10,13 +10,17 @@ Set Theme "Catppuccin Mocha"
 Set TypingSpeed 40ms
 
 Sleep 500ms
-Type "upp add https://example.com --name 'My Site'"
+Type "upp add https://httpbin.org/get --name 'API Monitor'"
 Enter
 Sleep 2.5s
 
+Type "upp add https://mosets.com --name 'Mosets'"
+Enter
+Sleep 2s
+
 Type "upp check"
 Enter
-Sleep 3s
+Sleep 4s
 
 Type "upp status"
 Enter

@@ -10,15 +10,15 @@ Set Theme "Catppuccin Mocha"
 Set TypingSpeed 40ms
 
 Sleep 500ms
-Type "upp add https://example.com/pricing --name 'Pricing' --selector 'div.price'"
+Type "upp add https://mosets.com --name 'Mosets' --selector 'title'"
 Enter
 Sleep 2s
 
-Type "upp check 'Pricing'"
+Type "upp check 'Mosets'"
 Enter
 Sleep 3s
 
-Type "upp diff 'Pricing'"
+Type "upp diff 'Mosets'"
 Enter
 Sleep 4s
 
