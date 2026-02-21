@@ -452,6 +452,7 @@ make cross
 | `list` / `ls` | List all monitored targets |
 | `check [target]` | Run checks (all or specific) |
 | `status [target]` | Show uptime stats and summary |
+| `view <target>` | Show full configuration for a target |
 | `tui` | Interactive terminal dashboard |
 | `watch` | Live auto-refreshing dashboard |
 | `ping <url>` | Quick one-off check (no DB save) |
